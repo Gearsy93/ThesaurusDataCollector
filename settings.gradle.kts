@@ -1,1 +1,1 @@
-rootProject.name = "vinitirubricatorparser"
+rootProject.name = "ThesaurusDataCollector"

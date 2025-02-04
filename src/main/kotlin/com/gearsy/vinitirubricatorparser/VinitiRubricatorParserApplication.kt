@@ -1,4 +1,4 @@
-package com.gearsy.vinitirubricatorparser
+package com.gearsy.thesaurusdatacollector
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
