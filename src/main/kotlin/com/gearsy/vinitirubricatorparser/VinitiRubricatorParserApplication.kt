@@ -4,8 +4,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class VinitiRubnricatorParserApplication
+class VinitiRubricatorParserApplication
 
 fun main(args: Array<String>) {
-	runApplication<VinitiRubnricatorParserApplication>(*args)
+	runApplication<VinitiRubricatorParserApplication>(*args)
 }
