@@ -14,7 +14,7 @@ class PdfThesaurusParserController(private val pdfThesaurusParserService: PdfThe
     @RequestMapping(
         path = ["/parse"],
         method = [RequestMethod.GET],
-        consumes = [MediaType.TEXT_PLAIN_VALUE],
+        consumes = [MediaType.ALL_VALUE],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
     fun parsePdfFile(fileName: String): List<InionRanDescriptor> {

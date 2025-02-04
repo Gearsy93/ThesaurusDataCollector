@@ -40,6 +40,8 @@ dependencies {
 	implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 	implementation("org.springframework.boot:spring-boot-configuration-processor")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4")
+	implementation("org.apache.pdfbox:pdfbox:3.0.4")
+
 }
 
 kotlin {
