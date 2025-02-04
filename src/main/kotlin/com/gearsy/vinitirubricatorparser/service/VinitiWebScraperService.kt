@@ -30,7 +30,7 @@ class VinitiWebScraperService {
     fun startScrapingService() {
 
         // Инициализация веб-драйвера
-        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(15));
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(15))
         driver.get(vinitiRubricatorURL)
 
         // Список корневых рубрик рубрикатора ВИНИТИ
