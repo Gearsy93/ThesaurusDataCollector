@@ -6,6 +6,6 @@ external-api:
   viniti:
     rubricator:
       url: http://scs.viniti.ru/rubtree/main.aspx?tree=RV
-
-
-
+  cscsti:
+    rubricator:
+      url: http://scs.viniti.ru/rubtree/main.aspx?tree=RGNTI
