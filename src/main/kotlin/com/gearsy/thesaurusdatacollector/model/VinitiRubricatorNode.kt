@@ -5,17 +5,17 @@ import com.fasterxml.jackson.annotation.JsonManagedReference
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class VinitiRubricatorNode(
-    val code: Int,
-    val rubricName: String,
-    val termList: List<String>,
-    var parentId: Int,
+    val cipher: String,
+    val title: String,
+    var termList: List<String>? = null,
+    var parentCipher: String? = null,
 
     @JsonManagedReference
-    val children: MutableList<VinitiRubricatorNode> = mutableListOf()
+    var children: MutableList<VinitiRubricatorNode> = mutableListOf()
 
 ) {
     fun addChildNode(child: VinitiRubricatorNode) {
-        child.parentId = this.code
+        child.parentCipher = this.cipher
         children.add(child)
     }
 }

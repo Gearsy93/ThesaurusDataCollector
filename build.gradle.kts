@@ -41,7 +41,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-configuration-processor")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4")
 	implementation("org.apache.pdfbox:pdfbox:3.0.4")
-
+	implementation("io.ktor:ktor-client-core:2.3.0")
+	implementation("io.ktor:ktor-client-cio:2.3.0")
+	implementation("io.ktor:ktor-client-serialization:2.3.0")
 }
 
 kotlin {

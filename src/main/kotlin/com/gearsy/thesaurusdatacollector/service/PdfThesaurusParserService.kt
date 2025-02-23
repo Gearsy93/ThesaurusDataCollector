@@ -1,6 +1,11 @@
 package com.gearsy.thesaurusdatacollector.service
 
 import com.gearsy.thesaurusdatacollector.model.InionRanDescriptor
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import jakarta.annotation.PostConstruct
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
 import org.springframework.stereotype.Service
