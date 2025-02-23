@@ -1,4 +1,4 @@
-package com.gearsy.thesaurusdatacollector.controller
+package com.gearsy.thesaurusdatacollector.deprecated.controller
 
 import com.gearsy.thesaurusdatacollector.model.InionRanDescriptor
 import com.gearsy.thesaurusdatacollector.service.PdfThesaurusParserService

@@ -30,7 +30,7 @@ class VinitiWebScraperService(
         scrapeWholeRubricTree()
     }
 
-    fun scrapeWholeRubricTree(): List<VinitiRubricatorNode> {
+    fun scrapeWholeRubricTree() {
 
         // Инициализация веб-драйвера
         WebDriverManager.chromedriver().setup()
@@ -38,13 +38,8 @@ class VinitiWebScraperService(
         // Ожидание загрузки начальной страницы
         driver.get(externalApiProperties.cscsti.rubricator.url)
 
-        // Список корневых рубрик рубрикатора ВИНИТИ
-        val rootRubricList: MutableList<VinitiRubricatorNode> = mutableListOf()
-
-        // TODO обернуть в try
+        // Основной методы работы со страницей
         getRubricHierarchy()
-
-        return rootRubricList
     }
 
     @PreDestroy
@@ -68,19 +63,22 @@ class VinitiWebScraperService(
         var upperLevelRubricTagList = rubricListTag.findElements(By.tagName("li"))
         val upperLevelRubricTagCount = upperLevelRubricTagList.size
 
-        // Маппер объектов
+        // Маппер объектов для сериализации
         val objectMapper = jacksonObjectMapper()
 
-        val startIndex = 3
+        // Сплошной индекс первой рубрики
+        val startIndex = 0
 
-        // upperLevelRubricTagCount - 1
-        val endIndex = 3
+        // Сплошной индекс последней рубрики
+        val endIndex = upperLevelRubricTagCount - 1
 
         // Рекурсивный обход все корневых рубрик с перезагрузкой страницы
         for (i in startIndex..endIndex) {
 
+            // Ссылка на тег корневой рубриик
             val upperRubricTag = upperLevelRubricTagList[i]
 
+            // Результат чтения дочерних рубрик
             val vinitiRubricatorNode = parseRubricRecursively(upperRubricTag)
 
             // Сериализация объекта
@@ -115,11 +113,12 @@ class VinitiWebScraperService(
         println("Найден SelByCod")
         println(expandRubricDescriptionTag.text)
 
+        // Ссылка для раскрытия дочерних рубрик текущей рубрики
         val expandRubricChildRubricsTag = rubricTag.findElement(By.xpath(".//a[contains(@href, 'NodeIconClick')]"))
         println("Найден NodeIconClick")
         println(expandRubricChildRubricsTag.text)
 
-        // Ссылка для раскрытия дочерних рубрик текущей рубрики
+        // Ожидание кликабельности ссылки разворачивания рубрики
         wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
         println("Кликнуто на развернуть рубрики")
 
@@ -133,6 +132,7 @@ class VinitiWebScraperService(
         wait.until(ExpectedConditions.presenceOfElementLocated(By.name("Form1")))
         println("Появился Form1")
         val nodeViewFormTag = driver.findElement(By.name("Form1"))
+
         println("Найден Form1")
         val vinitiRubricatorNode = parseRubricDescription(nodeViewFormTag)
 
@@ -167,8 +167,8 @@ class VinitiWebScraperService(
                     vinitiRubricatorNode.addChildNode(childNode)
                 }
             }
-        } catch (_: NoSuchElementException) {
-        }
+        } catch (_: NoSuchElementException) { }
+
         wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
         println("Закрыт раскрытый список")
 
@@ -188,14 +188,14 @@ class VinitiWebScraperService(
                 .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath(".//a[@title='Постоянная ссылка на данную рубрику']")))
         }
 
+        // Наименование рубрики
         val rubricName = rubricNameValueTags[0].text
         println("Рубрика: $rubricName")
 
         // Свойства рубрики
         val rubricPropertiesTableTag = WebDriverWait(driver, Duration.ofSeconds(30))
             .until(ExpectedConditions.presenceOfElementLocated(By.xpath(".//table[@class='scattered']")))
-
-        println("Свойства")
+        println("Свойства получены")
 
         // Оригинальный шифр
         val originalCipherValueTag = WebDriverWait(driver, Duration.ofSeconds(30))
@@ -234,12 +234,12 @@ class VinitiWebScraperService(
         wait.until(ExpectedConditions.elementToBeClickable(openKeywordsPopupLinkTag)).click()
         println("Окно со словами")
 
+        // Ожидание появления окна
         try {
             wait.until { driver.windowHandles.size > 1 }
         }
         catch (e: Exception) {
             wait.until(ExpectedConditions.elementToBeClickable(openKeywordsPopupLinkTag)).click()
-
             wait.until { driver.windowHandles.size > 1 }
         }
         println("Появилось окно")
@@ -247,6 +247,7 @@ class VinitiWebScraperService(
         // Переключиться на новое окно
         val newWindow = driver.windowHandles.find { it != mainWindow }
         println("Нашлось окно")
+
         requireNotNull(newWindow) { "Новое окно не появилось" }
         newWindow.let { driver.switchTo().window(it) }
         println("Переключилось на окно")
@@ -254,14 +255,18 @@ class VinitiWebScraperService(
         // Если нет ключевых слов, выйти
         try {
             driver.findElement(By.xpath(".//span[contains(text(),'Ключевых слов')]"))
-            println("Нет ключевых, уходи")
+            println("Нет ключевых слов")
+
             // Закрыть открытое окно и вернуться к основному
             driver.close()
             println("Закрыто окно")
+
             driver.switchTo().window(mainWindow)
             println("Переключено на главное окно")
+
             driver.switchTo().defaultContent()
             println("Переключен на главный фрейм")
+
             wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("fraNode")))
             println("Переключен на fraNode")
             return null
@@ -273,23 +278,24 @@ class VinitiWebScraperService(
         println("Найдена таблица ключевых")
 
         // Список всех строк ключевых слов
-        // TODO добавить try
         val keywordTagList = keywordTableTag.findElements(By.xpath(".//tr[contains(@class, 'GridItem') or contains(@class, 'GridAltItem')]"))
         println("Найдены строки ключевых")
 
         // Список ключевых слов
         val keywordList = keywordTagList.map { keywordTag -> keywordTag.findElement(By.tagName("td")).text }
         println("Извлечен список ключевых")
-
-        println("Ключевые: $keywordList")
+        println("Ключевые слова: $keywordList")
 
         // Закрыть открытое окно и вернуться к основному
         driver.close()
         println("Закрыто окно")
+
         driver.switchTo().window(mainWindow)
         println("Переключено на главное окно")
+
         driver.switchTo().defaultContent()
         println("Переключен на главный фрейм")
+
         wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("fraNode")))
         println("Переключен на fraNode")
 
