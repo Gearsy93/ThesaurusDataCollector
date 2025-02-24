@@ -1,5 +1,7 @@
-package com.gearsy.thesaurusdatacollector.utils
+package com.gearsy.thesaurusdatacollector.config
 
+import com.gearsy.thesaurusdatacollector.config.externalApi.CscstiProperties
+import com.gearsy.thesaurusdatacollector.config.externalApi.VinitiProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.annotation.Configuration
 
@@ -10,14 +12,8 @@ class ExternalApiProperties {
     lateinit var viniti: VinitiProperties
 }
 
-class CscstiProperties {
-    lateinit var rubricator: RubricatorProperties
-}
 
-class VinitiProperties {
-    lateinit var rubricator: RubricatorProperties
-}
 
-class RubricatorProperties {
-    lateinit var url: String
-}
+
+
+

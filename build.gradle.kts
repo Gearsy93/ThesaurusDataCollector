@@ -44,6 +44,7 @@ dependencies {
 	implementation("io.ktor:ktor-client-core:2.3.0")
 	implementation("io.ktor:ktor-client-cio:2.3.0")
 	implementation("io.ktor:ktor-client-serialization:2.3.0")
+	implementation("org.neo4j.driver:neo4j-java-driver:5.28.1")
 }
 
 kotlin {
@@ -52,6 +53,43 @@ kotlin {
 	}
 }
 
-tasks.withType<Test> {
-	useJUnitPlatform()
+tasks.withType<JavaExec> {
+	jvmArgs = listOf(
+		"-Dfile.encoding=UTF-8",
+		"-Dsun.stdout.encoding=UTF-8",
+		"-Dsun.stderr.encoding=UTF-8"
+	)
+}
+
+tasks.register<JavaExec>("runParseCscsti") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+	args = listOf("-parse_cscsti")
+}
+
+tasks.register<JavaExec>("runFillNeo4j") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+
+	// Читаем свойство 'filename' из Gradle, если оно задано, иначе можно задать значение по умолчанию.
+	val fileName: String = if (project.hasProperty("filename")) {
+		project.property("filename").toString()
+	} else {
+		"defaultFileName" // можно задать значение по умолчанию или вывести ошибку
+	}
+	args = listOf("-fillNeo4j", fileName)
+}
+
+tasks.register<JavaExec>("runClearNeo4j") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+	args = listOf("-clearNeo4j")
+	jvmArgs = listOf(
+		"-Dfile.encoding=UTF-8",
+		"-Dsun.stdout.encoding=UTF-8",
+		"-Dsun.stderr.encoding=UTF-8"
+	)
 }

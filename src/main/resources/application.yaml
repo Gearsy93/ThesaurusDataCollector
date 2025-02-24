@@ -9,3 +9,9 @@ external-api:
   cscsti:
     rubricator:
       url: http://scs.viniti.ru/rubtree/main.aspx?tree=RGNTI
+
+db:
+  neo4j:
+    uri: bolt://localhost:7687
+    username: neo4j
+    password: venomvenom--

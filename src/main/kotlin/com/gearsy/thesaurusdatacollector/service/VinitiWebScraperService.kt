@@ -2,9 +2,8 @@ package com.gearsy.thesaurusdatacollector.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.gearsy.thesaurusdatacollector.model.VinitiRubricatorNode
-import com.gearsy.thesaurusdatacollector.utils.ExternalApiProperties
+import com.gearsy.thesaurusdatacollector.config.ExternalApiProperties
 import io.github.bonigarcia.wdm.WebDriverManager
-import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.openqa.selenium.By
 import org.openqa.selenium.NoSuchElementException
@@ -22,17 +21,14 @@ class VinitiWebScraperService(
 ) {
 
     // Инициализация драйвера
-    private val driver = ChromeDriver()
-    private val wait = WebDriverWait(driver, Duration.ofSeconds(10))
-
-    @PostConstruct
-    fun init() {
-        scrapeWholeRubricTree()
-    }
+    private lateinit var driver: ChromeDriver
+    private lateinit var wait: WebDriverWait
 
     fun scrapeWholeRubricTree() {
 
         // Инициализация веб-драйвера
+        driver = ChromeDriver()
+        wait = WebDriverWait(driver, Duration.ofSeconds(10))
         WebDriverManager.chromedriver().setup()
 
         // Ожидание загрузки начальной страницы
@@ -85,7 +81,7 @@ class VinitiWebScraperService(
             val vinitiRubricatorNodeJson = objectMapper.writeValueAsString(vinitiRubricatorNode)
 
             // Сохранение корневой рубрики в файл
-            val filePath = "src/main/resources/output/${vinitiRubricatorNode?.cipher}.json"
+            val filePath = "src/main/resources/output/viniti/cscsti/${vinitiRubricatorNode?.cipher}.json"
             File(filePath).writeText(vinitiRubricatorNodeJson)
 
             // Обновление страницы для уменьшения шанса падения парсера

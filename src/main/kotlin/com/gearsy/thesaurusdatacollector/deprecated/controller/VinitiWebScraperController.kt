@@ -17,7 +17,7 @@ class VinitiWebScraperController(private val vinitiWebScraperService: VinitiWebS
         consumes = [MediaType.ALL_VALUE],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun scrapeWholeRubricTree(): List<VinitiRubricatorNode> {
+    fun scrapeWholeRubricTree() {
         return vinitiWebScraperService.scrapeWholeRubricTree()
     }
 }
