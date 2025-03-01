@@ -32,8 +32,15 @@ class ConsoleArgsRunner(
 
 		when {
 			arguments.contains("-parse_cscsti") -> {
-				println("Выполняется: Спылесосить ГРНТИ с сайта ВИНИТИ")
-				vinitiWebScraperService.scrapeWholeRubricTree()
+				val index = arguments.indexOf("-parse_cscsti")
+				if (arguments.size > index + 1) {
+					val rubricCipher = arguments[index + 1]
+					println("Выполняется: Спылесосить ГРНТИ с сайта ВИНИТИ для рубрики $rubricCipher")
+					vinitiWebScraperService.scrapeRubricFromTree(rubricCipher)
+				} else {
+					println("Ошибка: флаг -parse_cscsti требует указания шифра рубрики.")
+					printUsage()
+				}
 			}
 			arguments.contains("-fillNeo4j") -> {
 				val index = arguments.indexOf("-fillNeo4j")
@@ -65,14 +72,12 @@ class ConsoleArgsRunner(
 
 	private fun printUsage() {
 		println(
-			println(
-				"""
+			"""
             Использование:
-              -parse_cscsti           Выполнить сбор данных с сайта ВИНИТИ
+              -parse_cscsti <cipher>   Выполнить сбор данных с сайта ВИНИТИ для указанного шифра рубрики
               -fillNeo4j <filename>    Заполнить схему Neo4j с указанным именем файла (без расширения)
               -clearNeo4j             Очистить базу данных Neo4j
             """.trimIndent()
-			)
 		)
 	}
 }

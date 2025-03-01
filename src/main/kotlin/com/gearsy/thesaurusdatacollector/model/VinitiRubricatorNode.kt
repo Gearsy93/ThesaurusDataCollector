@@ -9,6 +9,7 @@ data class VinitiRubricatorNode(
     val title: String,
     var termList: List<String>? = null,
     var parentCipher: String? = null,
+    var linkCipherList: List<String>? = null,
 
     @JsonManagedReference
     var children: MutableList<VinitiRubricatorNode> = mutableListOf()

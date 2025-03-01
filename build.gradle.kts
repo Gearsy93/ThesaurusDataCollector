@@ -65,8 +65,16 @@ tasks.register<JavaExec>("runParseCscsti") {
 	group = "application"
 	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
 	classpath = sourceSets["main"].runtimeClasspath
-	args = listOf("-parse_cscsti")
+
+	// Читаем шифр рубрики из параметров Gradle (или используем значение по умолчанию)
+	val cipher: String = project.findProperty("cipher")?.toString() ?: run {
+		println("Ошибка: укажите шифр рубрики через -Pcipher=20.15")
+		return@register
+	}
+
+	args = listOf("-parse_cscsti", cipher)
 }
+
 
 tasks.register<JavaExec>("runFillNeo4j") {
 	group = "application"
