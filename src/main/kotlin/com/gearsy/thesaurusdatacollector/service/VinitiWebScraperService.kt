@@ -1,15 +1,19 @@
 package com.gearsy.thesaurusdatacollector.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.gearsy.thesaurusdatacollector.model.VinitiRubricatorNode
+import com.gearsy.thesaurusdatacollector.model.CSCSTIRubricatorNode
 import com.gearsy.thesaurusdatacollector.config.ExternalApiProperties
+import com.gearsy.thesaurusdatacollector.model.AbstractRubricatorNode
+import com.gearsy.thesaurusdatacollector.model.VinitiRubricatorNode
 import io.github.bonigarcia.wdm.WebDriverManager
 import jakarta.annotation.PreDestroy
 import org.openqa.selenium.By
+import org.openqa.selenium.ElementClickInterceptedException
 import org.openqa.selenium.NoSuchElementException
 import org.openqa.selenium.WebElement
 import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.support.ui.ExpectedConditions
+import org.openqa.selenium.support.ui.FluentWait
 import org.openqa.selenium.support.ui.WebDriverWait
 import org.springframework.stereotype.Service
 import java.io.File
@@ -30,7 +34,7 @@ class VinitiWebScraperService(
 
         // Инициализация веб-драйвера
         driver = ChromeDriver()
-        wait = WebDriverWait(driver, Duration.ofSeconds(10))
+        wait = WebDriverWait(driver, Duration.ofSeconds(6))
         WebDriverManager.chromedriver().setup()
 
 
@@ -79,7 +83,7 @@ class VinitiWebScraperService(
             val vinitiRubricatorNodeJson = objectMapper.writeValueAsString(vinitiRubricatorNode)
 
             // Сохранение корневой рубрики в файл
-            val filePath = "src/main/resources/output/viniti/cscsti/${vinitiRubricatorNode?.cipher}.json"
+            val filePath = "src/main/resources/output/rubricator/${currentRubricator}/${vinitiRubricatorNode?.cipher}.json"
             File(filePath).writeText(vinitiRubricatorNodeJson)
 
             // Обновление страницы для уменьшения шанса падения парсера
@@ -90,7 +94,7 @@ class VinitiWebScraperService(
         }
     }
 
-    fun parseRubricRecursively(rubricTag: WebElement): VinitiRubricatorNode? {
+    fun parseRubricRecursively(rubricTag: WebElement): AbstractRubricatorNode? {
 
         // Ссылка для раскрытия описания рубрики
         val expandRubricDescriptionTag = rubricTag.findElement(By.xpath(".//a[contains(@href, 'SelByCod')]"))
@@ -170,7 +174,12 @@ class VinitiWebScraperService(
         }
         catch (_: TimeoutException) { }
 
-        wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+        try {
+            wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+        }
+        catch (e: Exception) {
+            wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+        }
         println("Закрыт раскрытый список")
 
         return vinitiRubricatorNode
@@ -242,7 +251,7 @@ class VinitiWebScraperService(
         return linkCipherList
     }
 
-    fun parseRubricDescription(formTag: WebElement): VinitiRubricatorNode? {
+    fun parseRubricDescription(formTag: WebElement): AbstractRubricatorNode? {
 
         // Наименование рубрики
         var rubricNameValueTags = WebDriverWait(driver, Duration.ofSeconds(30))
@@ -259,11 +268,6 @@ class VinitiWebScraperService(
         val rubricName = rubricNameValueTags[1].text
         println("Рубрика: $rubricName")
 
-        // Свойства рубрики
-//        val rubricPropertiesTableTag = WebDriverWait(driver, Duration.ofSeconds(30))
-//            .until(ExpectedConditions.presenceOfElementLocated(By.xpath(".//table[@class='scattered']")))
-//        println("Свойства получены")
-
         // Все строки таблицы
         var tableRowTagList: List<WebElement>
         try {
@@ -276,7 +280,7 @@ class VinitiWebScraperService(
         }
 
         // Строка с шифром
-        val cipherRowTag = tableRowTagList.first() { tableRowTag -> tableRowTag.findElement(By.className("NodeFieldName")).getAttribute("innerHTML") == "Ориг. шифр" }
+        val cipherRowTag = tableRowTagList.first { tableRowTag -> tableRowTag.findElement(By.className("NodeFieldName")).getAttribute("innerHTML") == "Ориг. шифр" }
 
         // Оригинальный шифр
         val originalCipher = cipherRowTag.findElement(By.className("NodeFieldValue")).getAttribute("innerHTML")!!
@@ -293,67 +297,131 @@ class VinitiWebScraperService(
         println("Окно ключевые")
 
         // Извлечение ключевых слов из открываемого окна
-        // mutableListOf<String>()
         val keywordList = processKeywordWindow(openKeywordsPopupLinkTag)
+//        val keywordList = if (originalCipher == "201.17.15.11") {
+//            processKeywordWindow(openKeywordsPopupLinkTag)
+//        }
+//        else {
+//
+//            mutableListOf()
+//        }
 
-        // Таблица с отображениями рубрики на другие классификаторы (схемы)
-//        val schemaMappingTableTag = WebDriverWait(driver, Duration.ofSeconds(30))
-//            .until(ExpectedConditions.presenceOfElementLocated(By.xpath(".//table[@class='scattered']")))
-//        println("Отображения на схемы")
 
-        return VinitiRubricatorNode(
-            originalCipher,
-            rubricName,
-            keywordList,
-            null
-        )
+
+        if (currentRubricator == "cscsti") {
+            return CSCSTIRubricatorNode(
+                originalCipher,
+                rubricName,
+                keywordList
+            )
+        }
+        else if (currentRubricator == "viniti") {
+
+            // Таблица с отображениями рубрики на другие классификаторы (схемы)
+            var schemaMappingTableTagList = WebDriverWait(driver, Duration.ofSeconds(3))
+                .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath(".//table[@class='scattered']")))
+            println("Отображения на схемы")
+
+            // Повторная попытка найти
+            if (schemaMappingTableTagList.size != 2) {
+                schemaMappingTableTagList = WebDriverWait(driver, Duration.ofSeconds(3))
+                    .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath(".//table[@class='scattered']")))
+            }
+
+            // Извлечение шифра рубрики ГРНТИ
+            val cscstiRubricCipher = processMappingWindows(schemaMappingTableTagList[1])
+//            val cscstiRubricCipher = if (originalCipher == "201.17.15.11") {
+//                processMappingWindows(schemaMappingTableTagList[1])
+//            }
+//            else {
+//                ""
+//            }
+
+            return VinitiRubricatorNode(
+                originalCipher,
+                rubricName,
+                keywordList,
+                vinitiParentNodeCipher=cscstiRubricCipher
+            )
+        }
+        else {
+            throw Exception("Рубрикатор не поддерживается")
+        }
+    }
+
+    fun processMappingWindows(schemaMappingTableTag: WebElement): String {
+
+        // Ожидание загрузки ссылок на рубрикаторы
+        try {
+            wait.until { schemaMappingTableTag.findElements(By.xpath(".//a[contains(@href, 'OpenMappedNodes(\"RGNTI\")')]")).isNotEmpty() }
+        }
+        catch (e: Exception) {
+            wait.until { schemaMappingTableTag.findElements(By.xpath(".//a[contains(@href, 'OpenMappedNodes(\"RGNTI\")')]")).isNotEmpty() }
+        }
+
+        // Тег со ссылкой на открытие окна с отображением на ГРНТИ
+        val cscstiLinkTag = schemaMappingTableTag.findElement(By.xpath(".//a[contains(@href, 'OpenMappedNodes(\"RGNTI\")')]"))
+        println("Ссылка на отображение ГРНТИ найдено")
+
+        // Открытие нового окна
+        val mainWindow = openWindow(cscstiLinkTag)
+        println("Открыто окно с описанием отображения")
+
+        // Проверка наличия тега-ссылки на рубрику
+        try {
+            val customWait = FluentWait(driver)
+                .withTimeout(Duration.ofSeconds(1.5.toLong()))   // Максимальное время ожидания
+                .pollingEvery(Duration.ofMillis(500)) // Интервал проверки наличия элемента
+                .ignoring(org.openqa.selenium.NoSuchElementException::class.java) // Игнорируем ошибку отсутствия элемента
+
+            val elements = customWait.until {
+                driver.findElements(By.xpath(".//a[contains(@onclick, 'SetWinLocation')]"))
+            }.filterNotNull()
+
+            if (elements.isNotEmpty()) {
+                println("Элементы найдены")
+            } else {
+                println("Элементы не найдены")
+                closeWindow(mainWindow)
+                return ""
+            }
+        }
+        catch (e: Exception) {
+
+            // Отображения нет, закрытие текущего окна, переключение на основное (fraNode)
+            closeWindow(mainWindow)
+
+            return ""
+        }
+
+        // Получение тега-ссылки
+        val rubricLinkTag = driver.findElement(By.xpath(".//a[contains(@onclick, 'SetWinLocation')]"))
+
+        // Извлечение содержимого из тега
+        val linkInner = rubricLinkTag.getAttribute("innerHTML")
+
+        // Извлечение шифра тега
+        val cscstiRubricCipher = linkInner!!.split(" ")[0]
+
+        // Закрытие текущего окна, переключение на основное (fraNode)
+        closeWindow(mainWindow)
+
+        return cscstiRubricCipher
     }
 
     fun processKeywordWindow(openKeywordsPopupLinkTag: WebElement): List<String>? {
 
-        // Хендлер текущего окна
-        val mainWindow = driver.windowHandle
-        println("Текущее окно")
-
-        // Открыть новое окно и дождаться появления
-        wait.until(ExpectedConditions.elementToBeClickable(openKeywordsPopupLinkTag)).click()
-        println("Окно со словами")
-
-        // Ожидание появления окна
-        try {
-            wait.until { driver.windowHandles.size > 1 }
-        }
-        catch (e: Exception) {
-            wait.until(ExpectedConditions.elementToBeClickable(openKeywordsPopupLinkTag)).click()
-            wait.until { driver.windowHandles.size > 1 }
-        }
-        println("Появилось окно")
-
-        // Переключиться на новое окно
-        val newWindow = driver.windowHandles.find { it != mainWindow }
-        println("Нашлось окно")
-
-        requireNotNull(newWindow) { "Новое окно не появилось" }
-        newWindow.let { driver.switchTo().window(it) }
-        println("Переключилось на окно")
+        // Открытие нового окна
+        val mainWindow = openWindow(openKeywordsPopupLinkTag)
 
         // Если нет ключевых слов, выйти
         try {
             driver.findElement(By.xpath(".//span[contains(text(),'Ключевых слов')]"))
             println("Нет ключевых слов")
 
-            // Закрыть открытое окно и вернуться к основному
-            driver.close()
-            println("Закрыто окно")
+            // Закрытие текущего окна, переключение на основное (fraNode)
+            closeWindow(mainWindow)
 
-            driver.switchTo().window(mainWindow)
-            println("Переключено на главное окно")
-
-            driver.switchTo().defaultContent()
-            println("Переключен на главный фрейм")
-
-            wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("fraNode")))
-            println("Переключен на fraNode")
             return null
         }
         catch (_: NoSuchElementException) {}
@@ -361,7 +429,6 @@ class VinitiWebScraperService(
         var tdTag = getKeywordPageTable()
 
         // Ссылки на страницы извлекаются после каждого обновления
-
         var linkTagList = tdTag.findElements(By.tagName("a"))
 
         // Список всех ключевых слов
@@ -444,6 +511,71 @@ class VinitiWebScraperService(
 
         } while (pageIndex < linkTagList.size)
 
+        // Закрытие текущего окна, переключение на основное (fraNode)
+        closeWindow(mainWindow)
+
+        return keywordList
+    }
+
+    fun openWindow(clickableTag: WebElement): String {
+
+        // Хендлер текущего окна
+        val mainWindow = driver.windowHandle
+        println("Текущее окно")
+
+        val customWait = FluentWait(driver)
+            .withTimeout(Duration.ofSeconds(10))  // Общий таймаут ожидания
+            .pollingEvery(Duration.ofMillis(500)) // Частота проверок
+            .ignoring(NoSuchElementException::class.java) // Игнорируем отсутствие элемента
+            .ignoring(ElementClickInterceptedException::class.java) // Если элемент перекрыт другим
+            .ignoring(TimeoutException::class.java) // Если элемент долго загружается
+
+        try {
+            val element = customWait.until {
+                if (clickableTag.isDisplayed && clickableTag.isEnabled) {
+                    clickableTag
+                } else {
+                    null // Ждем, пока элемент не станет видимым и активным
+                }
+            }
+            element?.click()
+            println("Окно открыто")
+        } catch (e: Exception) {
+            println("Окно не открылось, вторая попытка...")
+
+            val element = customWait.until {
+                if (clickableTag.isDisplayed && clickableTag.isEnabled) {
+                    clickableTag
+                } else {
+                    null // Ждем, пока элемент не станет видимым и активным
+                }
+            }
+            element?.click()
+            println("Окно открыто")
+        }
+
+        // Ожидание появления окна
+        try {
+            wait.until { driver.windowHandles.size > 1 }
+        }
+        catch (e: Exception) {
+            wait.until(ExpectedConditions.elementToBeClickable(clickableTag)).click()
+            wait.until { driver.windowHandles.size > 1 }
+        }
+        println("Появилось окно")
+
+        // Переключиться на новое окно
+        val newWindow = driver.windowHandles.find { it != mainWindow }
+        println("Нашлось окно")
+
+        requireNotNull(newWindow) { "Новое окно не появилось" }
+        newWindow.let { driver.switchTo().window(it) }
+        println("Переключилось на окно")
+
+        return mainWindow
+    }
+
+    fun closeWindow(mainWindow: String) {
         // Закрыть открытое окно и вернуться к основному
         driver.close()
         println("Закрыто окно")
@@ -456,8 +588,6 @@ class VinitiWebScraperService(
 
         wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("fraNode")))
         println("Переключен на fraNode")
-
-        return keywordList
     }
 
     fun getKeywordPageTable(): WebElement {

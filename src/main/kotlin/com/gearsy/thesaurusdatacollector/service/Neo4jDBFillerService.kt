@@ -2,8 +2,8 @@ package com.gearsy.thesaurusdatacollector.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.gearsy.thesaurusdatacollector.config.Neo4jProperties
-import com.gearsy.thesaurusdatacollector.model.VinitiRubricatorNode
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.gearsy.thesaurusdatacollector.model.AbstractRubricatorNode
 import jakarta.annotation.PreDestroy
 import org.neo4j.driver.AuthTokens
 import org.neo4j.driver.Driver
@@ -28,10 +28,11 @@ class Neo4jDBFillerService(
     fun fillNeo4jSchemaWithRubricJson(filename: String) {
 
         // Путь к файлу JSON
+        // TODO поправить
         val filePath = "src/main/resources/output/viniti/cscsti/${filename}.json"
 
         val mapper = jacksonObjectMapper()
-        val rootRubric: VinitiRubricatorNode = mapper.readValue(File(filePath))
+        val rootRubric: AbstractRubricatorNode = mapper.readValue(File(filePath))
 
         // Открываем сессию и заполняем базу
         driver.session().use { session ->
@@ -41,7 +42,7 @@ class Neo4jDBFillerService(
 
     }
 
-    fun insertRubric(session: Session, rubricNode: VinitiRubricatorNode, parentCipher: String?) {
+    fun insertRubric(session: Session, rubricNode: AbstractRubricatorNode, parentCipher: String?) {
         // Запрос для создания или обновления узла с меткой Rubric
         val query = """
         MERGE (r:Rubric {cipher: ${'$'}cipher})

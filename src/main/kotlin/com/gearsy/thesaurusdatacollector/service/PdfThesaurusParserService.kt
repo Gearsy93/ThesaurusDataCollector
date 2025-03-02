@@ -1,9 +1,6 @@
 package com.gearsy.thesaurusdatacollector.service
 
-import org.apache.pdfbox.Loader
-import org.apache.pdfbox.text.PDFTextStripper
 import org.springframework.stereotype.Service
-import java.io.File
 import java.nio.file.Paths
 import kotlin.io.path.pathString
 

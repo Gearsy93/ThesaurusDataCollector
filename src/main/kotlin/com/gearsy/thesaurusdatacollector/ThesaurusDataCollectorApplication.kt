@@ -1,6 +1,7 @@
 package com.gearsy.thesaurusdatacollector
 
 import com.gearsy.thesaurusdatacollector.service.Neo4jDBFillerService
+import com.gearsy.thesaurusdatacollector.service.RubricMergeService
 import com.gearsy.thesaurusdatacollector.service.VinitiWebScraperService
 import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -17,12 +18,11 @@ fun main(args: Array<String>) {
 @Component
 class ConsoleArgsRunner(
 	private val vinitiWebScraperService: VinitiWebScraperService,
-	private val neo4jDBFillerService: Neo4jDBFillerService
+	private val neo4jDBFillerService: Neo4jDBFillerService,
+	private val rubricMergeService: RubricMergeService
 ) : CommandLineRunner {
 
 	override fun run(vararg args: String?) {
-
-		// Убираем возможные null значения
 		val arguments = args.filterNotNull()
 
 		if (arguments.isEmpty()) {
@@ -46,7 +46,6 @@ class ConsoleArgsRunner(
 				val index = arguments.indexOf("-fillNeo4j")
 				if (arguments.size > index + 1) {
 					val fileName = arguments[index + 1]
-					// Проверка: имя файла не должно содержать точку
 					if (fileName.contains('.')) {
 						println("Ошибка: имя файла не должно содержать расширение.")
 						printUsage()
@@ -63,6 +62,18 @@ class ConsoleArgsRunner(
 				println("Выполняется: Очистка базы данных Neo4j")
 				neo4jDBFillerService.clearDatabase()
 			}
+			arguments.contains("-enrich_cscsti") -> {
+				val index = arguments.indexOf("-enrich_cscsti")
+				if (arguments.size > index + 2) {
+					val cscstiCipher = arguments[index + 1]
+					val vinitiCipher = arguments[index + 2]
+					println("Обогащение рубрики CSCSTI ($cscstiCipher) ключевыми словами VINITI ($vinitiCipher)")
+					rubricMergeService.enrichCSCSTIRootRubricWithVinitiKeyword(cscstiCipher, vinitiCipher)
+				} else {
+					println("Ошибка: флаг -enrich_cscsti требует два аргумента: <cscstiCipher> <vinitiCipher>")
+					printUsage()
+				}
+			}
 			else -> {
 				println("Неизвестные аргументы.")
 				printUsage()
@@ -74,9 +85,10 @@ class ConsoleArgsRunner(
 		println(
 			"""
             Использование:
-              -parse_cscsti <cipher>   Выполнить сбор данных с сайта ВИНИТИ для указанного шифра рубрики
-              -fillNeo4j <filename>    Заполнить схему Neo4j с указанным именем файла (без расширения)
-              -clearNeo4j             Очистить базу данных Neo4j
+              -parse_cscsti <cipher>         Извлечь структуру ГРНТИ с сайта ВИНИТИ для указанного шифра рубрики
+              -fillNeo4j <filename>          Заполнить схему Neo4j с указанным именем файла (без расширения)
+              -clearNeo4j                    Очистить базу данных Neo4j
+              -enrich_cscsti <cscsti> <viniti> Обогатить рубрику CSCSTI ключевыми словами из рубрики VINITI
             """.trimIndent()
 		)
 	}

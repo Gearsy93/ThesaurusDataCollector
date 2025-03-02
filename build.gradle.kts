@@ -68,7 +68,6 @@ tasks.register<JavaExec>("runParseCscsti") {
 
 	// Читаем шифр рубрики из параметров Gradle (или используем значение по умолчанию)
 	val cipher: String = project.findProperty("cipher")?.toString() ?: run {
-		println("Ошибка: укажите шифр рубрики через -Pcipher=20.15")
 		return@register
 	}
 
@@ -100,4 +99,23 @@ tasks.register<JavaExec>("runClearNeo4j") {
 		"-Dsun.stdout.encoding=UTF-8",
 		"-Dsun.stderr.encoding=UTF-8"
 	)
+}
+
+tasks.register<JavaExec>("runEnrichCSCSTIByVinitiKeywords") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+
+	// Читаем параметры из аргументов Gradle (-PcscstiCipher=... -PvinitiCipher=...)
+	val cscstiCipher: String = project.findProperty("cscstiCipher")?.toString() ?: run {
+		println("Ошибка: укажите шифр рубрики CSCSTI через  =...")
+		return@register
+	}
+
+	val vinitiCipher: String = project.findProperty("vinitiCipher")?.toString() ?: run {
+		println("Ошибка: укажите шифр рубрики VINITI через  ...")
+		return@register
+	}
+
+	args = listOf("-enrich_cscsti", cscstiCipher, vinitiCipher)
 }
