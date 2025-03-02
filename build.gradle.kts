@@ -74,33 +74,6 @@ tasks.register<JavaExec>("runParseCscsti") {
 	args = listOf("-parse_cscsti", cipher)
 }
 
-
-tasks.register<JavaExec>("runFillNeo4j") {
-	group = "application"
-	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
-	classpath = sourceSets["main"].runtimeClasspath
-
-	// Читаем свойство 'filename' из Gradle, если оно задано, иначе можно задать значение по умолчанию.
-	val fileName: String = if (project.hasProperty("filename")) {
-		project.property("filename").toString()
-	} else {
-		"defaultFileName" // можно задать значение по умолчанию или вывести ошибку
-	}
-	args = listOf("-fillNeo4j", fileName)
-}
-
-tasks.register<JavaExec>("runClearNeo4j") {
-	group = "application"
-	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
-	classpath = sourceSets["main"].runtimeClasspath
-	args = listOf("-clearNeo4j")
-	jvmArgs = listOf(
-		"-Dfile.encoding=UTF-8",
-		"-Dsun.stdout.encoding=UTF-8",
-		"-Dsun.stderr.encoding=UTF-8"
-	)
-}
-
 tasks.register<JavaExec>("runEnrichCSCSTIByVinitiKeywords") {
 	group = "application"
 	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
