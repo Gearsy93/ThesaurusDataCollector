@@ -28,7 +28,7 @@ class VinitiWebScraperService(
     // Инициализация драйвера
     private lateinit var driver: ChromeDriver
     private lateinit var wait: WebDriverWait
-    private val currentRubricator = "cscsti"
+    private val currentRubricator = "viniti"
 
     fun scrapeRubricFromTree(rubricCipher: String) {
 

@@ -43,6 +43,28 @@ class ConsoleArgsRunner(
                     printUsage()
                 }
             }
+            arguments.contains("-list_link_rubric") -> {
+                val index = arguments.indexOf("-list_link_rubric")
+                if (arguments.size > index + 1) {
+                    val rubricCipher = arguments[index + 1]
+                    println("Список ссылочных рубрик для рубрики ГРНТИ $rubricCipher")
+                    rubricMergeService.linkRubricParse(rubricCipher)
+                } else {
+                    println("Ошибка: флаг -list_link_rubric требует указания шифра рубрики.")
+                    printUsage()
+                }
+            }
+            arguments.contains("-fill_link_keyword") -> {
+                val index = arguments.indexOf("-fill_link_keyword")
+                if (arguments.size > index + 1) {
+                    val rubricCipher = arguments[index + 1]
+                    println("Заполнение ключевых слов по ссылочным рубрикам ГРНТИ $rubricCipher")
+                    rubricMergeService.fillWithLinkRubricKeywords(rubricCipher)
+                } else {
+                    println("Ошибка: флаг -fill_link_keyword требует указания шифра рубрики.")
+                    printUsage()
+                }
+            }
             else -> {
                 println("Неизвестные аргументы.")
                 printUsage()
@@ -58,6 +80,7 @@ class ConsoleArgsRunner(
               -fillNeo4j <filename>          Заполнить схему Neo4j с указанным именем файла (без расширения)
               -clearNeo4j                    Очистить базу данных Neo4j
               -enrich_cscsti <cscsti> <viniti> Обогатить рубрику CSCSTI ключевыми словами из рубрики VINITI
+              -list_link_rubric <cipher>     Список ссылочных рубрик для рубрики ГРНТИ
             """.trimIndent()
         )
     }

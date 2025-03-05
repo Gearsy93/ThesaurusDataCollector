@@ -89,3 +89,27 @@ tasks.register<JavaExec>("runEnrichCSCSTIByVinitiKeywords") {
 
 	args = listOf("-enrich_cscsti", cscstiCipher, vinitiCipher)
 }
+
+tasks.register<JavaExec>("runListLinkRubric") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+
+	val cipher: String = project.findProperty("cipher")?.toString() ?: run {
+		return@register
+	}
+
+	args = listOf("-list_link_rubric", cipher)
+}
+
+tasks.register<JavaExec>("runFillWithLinkRubricKeywords") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+
+	val cipher: String = project.findProperty("cipher")?.toString() ?: run {
+		return@register
+	}
+
+	args = listOf("-fill_link_keyword", cipher)
+}
