@@ -45,7 +45,6 @@ class RubricMergeService {
         // Карта соответствия: ключ – cipher ВИНИТИ, значение – ключевые слова
         val vinitiKeywordsMap = mutableMapOf<String, MutableSet<String>>()
 
-        // 1️⃣ Обходим ВИНИТИ, собирая ключевые слова по vinitiParentNodeCipher
         fun extractVinitiKeywords(node: JsonNode) {
             val vinitiParentCipher = node.get("vinitiParentNodeCipher")?.asText() ?: ""
             if (vinitiParentCipher.isNotBlank()) {
@@ -56,9 +55,8 @@ class RubricMergeService {
         }
         extractVinitiKeywords(vinitiJsonNode)
 
-        // 2️⃣ Обновляем ГРНТИ с новыми полями
-        fun updateCSCSTI(node: JsonNode): JsonNode {
-            val cipher = node.get("cipher")?.asText() ?: return node
+        fun updateCSCSTI(node: JsonNode): ObjectNode {
+            val cipher = node.get("cipher")?.asText() ?: return node as ObjectNode
             val existingKeywords = node.get("termList")?.map { it.asText() }?.toMutableSet() ?: mutableSetOf()
             val updatedKeywords = mutableListOf<Pair<String, Int>>() // Ключевые слова + rubricatorId
 
@@ -68,17 +66,8 @@ class RubricMergeService {
             // Добавляем ключевые слова из ВИНИТИ (rubricatorId = 2)
             vinitiKeywordsMap[cipher]?.forEach { updatedKeywords.add(it to 2) }
 
-            // Создаём новую структуру рубрики
-            val enrichedNode = objectMapper.createObjectNode()
-
-            // Добавляем поле `rubricatorId` (информационные поля)
-            val rubricatorIdNode = objectMapper.createObjectNode()
-            rubricatorIdNode.put("1", "Государственный рубрикатор научно-технической информации")
-            rubricatorIdNode.put("2", "Рубрикатор отраслей знаний ВИНИТИ РАН")
-            enrichedNode.set<ObjectNode>("rubricatorId", rubricatorIdNode)
-
-            // Переносим текущее содержимое в `content`
-            enrichedNode.set<ObjectNode>("content", node)
+            // Создаём объект без дублирующего `content`
+            val enrichedNode = node.deepCopy<ObjectNode>()
 
             // Обновляем `termList`, создавая список объектов с `rubricatorId`
             val newTermList = objectMapper.createArrayNode()
@@ -88,16 +77,29 @@ class RubricMergeService {
                 termObject.put("rubricatorId", rubricatorId)
                 newTermList.add(termObject)
             }
-            (enrichedNode["content"] as ObjectNode).set<ArrayNode>("termList", newTermList)
+            enrichedNode.set<ArrayNode>("termList", newTermList)
 
             // Рекурсивно обновляем дочерние узлы
             val childrenArray = objectMapper.createArrayNode()
             node.get("children")?.forEach { childrenArray.add(updateCSCSTI(it)) }
-            (enrichedNode["content"] as ObjectNode).set<ArrayNode>("children", childrenArray)
+            enrichedNode.set<ArrayNode>("children", childrenArray)
 
             return enrichedNode
         }
 
-        return updateCSCSTI(cscstiJsonNode)
+        // Создаем корневой узел JSON без дублирования `content`
+        val rootJson = objectMapper.createObjectNode()
+
+        // Добавляем поле `rubricatorId` (информационные поля) **только один раз**
+        val rubricatorIdNode = objectMapper.createObjectNode()
+        rubricatorIdNode.put("1", "Государственный рубрикатор научно-технической информации")
+        rubricatorIdNode.put("2", "Рубрикатор отраслей знаний ВИНИТИ РАН")
+        rootJson.set<ObjectNode>("rubricatorId", rubricatorIdNode)
+
+        // Добавляем `content`, но сам `content` не вложен в `content`
+        val updatedContent = updateCSCSTI(cscstiJsonNode)
+        rootJson.set<ObjectNode>("content", updatedContent)
+
+        return rootJson
     }
 }

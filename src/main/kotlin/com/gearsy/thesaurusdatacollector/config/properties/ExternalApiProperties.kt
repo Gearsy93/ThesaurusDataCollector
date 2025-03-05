@@ -1,7 +1,7 @@
-package com.gearsy.thesaurusdatacollector.config
+package com.gearsy.thesaurusdatacollector.config.properties
 
-import com.gearsy.thesaurusdatacollector.config.externalApi.CscstiProperties
-import com.gearsy.thesaurusdatacollector.config.externalApi.VinitiProperties
+import com.gearsy.thesaurusdatacollector.config.properties.externalApi.CscstiProperties
+import com.gearsy.thesaurusdatacollector.config.properties.externalApi.VinitiProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.annotation.Configuration
 

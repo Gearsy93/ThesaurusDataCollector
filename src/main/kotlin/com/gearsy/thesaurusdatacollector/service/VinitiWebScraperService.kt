@@ -2,7 +2,7 @@ package com.gearsy.thesaurusdatacollector.service
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.gearsy.thesaurusdatacollector.model.CSCSTIRubricatorNode
-import com.gearsy.thesaurusdatacollector.config.ExternalApiProperties
+import com.gearsy.thesaurusdatacollector.config.properties.ExternalApiProperties
 import com.gearsy.thesaurusdatacollector.model.AbstractRubricatorNode
 import com.gearsy.thesaurusdatacollector.model.VinitiRubricatorNode
 import io.github.bonigarcia.wdm.WebDriverManager
@@ -28,7 +28,7 @@ class VinitiWebScraperService(
     // Инициализация драйвера
     private lateinit var driver: ChromeDriver
     private lateinit var wait: WebDriverWait
-    private val currentRubricator = "viniti"
+    private val currentRubricator = "cscsti"
 
     fun scrapeRubricFromTree(rubricCipher: String) {
 
@@ -139,6 +139,7 @@ class VinitiWebScraperService(
 
         // Проверка наличия вложенных рубрик
         try {
+
             // Тег, содержащий список дочерних рубрик
             val childRubricContainerTag = rubricTag.findElement(By.className("clsShown"))
             println("Найден ul clsShown")
@@ -155,6 +156,14 @@ class VinitiWebScraperService(
             // Список дочерних рубрик
             val childRubricTagList = childRubricContainerTag.findElements(By.xpath("./li"))
             println("Найдены li")
+
+            // Вложение рубрик через <i>
+            try {
+                val iContainerTag = childRubricContainerTag.findElement(By.xpath("./i"))
+                val iContainerChildTagList = iContainerTag.findElements(By.xpath("./li"))
+                childRubricTagList.addAll(iContainerChildTagList)
+            }
+            catch (_: NoSuchElementException) { }
 
             for (childRubricTag in childRubricTagList) {
                 val childNode = parseRubricRecursively(childRubricTag)
@@ -287,7 +296,7 @@ class VinitiWebScraperService(
         println("Шифр")
 
         // Аспекты не рассматриваются в реализации
-        if (originalCipher.lowercase() == "аспект") {
+        if (originalCipher.lowercase().contains("аспект")) {
             return null
         }
 
@@ -298,14 +307,6 @@ class VinitiWebScraperService(
 
         // Извлечение ключевых слов из открываемого окна
         val keywordList = processKeywordWindow(openKeywordsPopupLinkTag)
-//        val keywordList = if (originalCipher == "201.17.15.11") {
-//            processKeywordWindow(openKeywordsPopupLinkTag)
-//        }
-//        else {
-//
-//            mutableListOf()
-//        }
-
 
 
         if (currentRubricator == "cscsti") {
@@ -330,12 +331,6 @@ class VinitiWebScraperService(
 
             // Извлечение шифра рубрики ГРНТИ
             val cscstiRubricCipher = processMappingWindows(schemaMappingTableTagList[1])
-//            val cscstiRubricCipher = if (originalCipher == "201.17.15.11") {
-//                processMappingWindows(schemaMappingTableTagList[1])
-//            }
-//            else {
-//                ""
-//            }
 
             return VinitiRubricatorNode(
                 originalCipher,
@@ -390,7 +385,6 @@ class VinitiWebScraperService(
 
             // Отображения нет, закрытие текущего окна, переключение на основное (fraNode)
             closeWindow(mainWindow)
-
             return ""
         }
 
@@ -576,6 +570,7 @@ class VinitiWebScraperService(
     }
 
     fun closeWindow(mainWindow: String) {
+
         // Закрыть открытое окно и вернуться к основному
         driver.close()
         println("Закрыто окно")
