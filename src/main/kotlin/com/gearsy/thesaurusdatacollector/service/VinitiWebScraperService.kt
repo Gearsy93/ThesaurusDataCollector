@@ -137,10 +137,12 @@ class VinitiWebScraperService(
                 println("\nОшибка при чтении описания рубрики, вторая попытка\n")
 
                 // Закрываем все открытые окна, кроме главного
-                val mainWindow = driver.windowHandle
-                driver.windowHandles.filter { it != mainWindow }.forEach { window ->
-                    driver.switchTo().window(window).close()
-                }
+                val mainWindow = driver.windowHandles.first() // Запоминаем главное окно
+                driver.windowHandles
+                    .filter { it != mainWindow } // Закрываем только не главное окно
+                    .forEach { window ->
+                        driver.switchTo().window(window).close()
+                    }
 
                 // Переключаемся обратно на fraNode
                 driver.switchTo().defaultContent()
@@ -462,20 +464,16 @@ class VinitiWebScraperService(
         }
         catch (_: NoSuchElementException) {}
 
-        var tdTag = getKeywordPageTable()
-
-        // Ссылки на страницы извлекаются после каждого обновления
-        var linkTagList = tdTag.findElements(By.tagName("a"))
-
         // Список всех ключевых слов
         val keywordList = mutableListOf<String>()
 
-        // Итерация по страницам
-        var pageNumber: String = ""
-        var offsetDone = false
+        // Номер текущей страницы
+        var currentPageNumber: String
 
-        var pageIndex = -1
         do {
+
+            // Ожидание загрузки таблицы
+            val tdTag = getKeywordPageTable()
 
             // Ожидание подгрузки таблицы
             val keywordTableTag = wait.until(ExpectedConditions.presenceOfElementLocated(By.className("Grid")))
@@ -487,43 +485,7 @@ class VinitiWebScraperService(
 
             // Список ключевых слов
             keywordList.addAll(keywordTagList.map { keywordTag -> keywordTag.findElement(By.tagName("td")).text })
-            println("Извлечен список ключевых")
             println("Все ключевые слова с новыми: $keywordList")
-
-            // Переход на следующую страницу
-            pageIndex++
-
-            // Проверка символа последней ссылки
-            val lastLinkSymbol = if (linkTagList.size > 0) {
-                 linkTagList[linkTagList.size - 1].getAttribute("innerHTML")!!
-            }
-            else {
-               ""
-            }
-
-
-            // Если последняя страница, выходим из циклов
-            if (pageIndex == linkTagList.size && lastLinkSymbol.trim() != "...") {
-                break
-            }
-
-            // Если номер страницы по последней ссылки меньше текущей страницы, выходим из цикла
-            if (lastLinkSymbol.trim() != "..." && offsetDone) {
-                if (lastLinkSymbol.toInt() < pageNumber.toInt()) {
-                    break
-                }
-            }
-
-            // Поддержки более 20 страниц нет
-            try {
-                wait.until(ExpectedConditions.elementToBeClickable(linkTagList[pageIndex])).click()
-            }
-            catch (e: IndexOutOfBoundsException) {
-                break
-            }
-
-            // После обновления страницы теги заново ищутся
-            tdTag = getKeywordPageTable()
 
             // Ожидание загрузки ссылок
             try {
@@ -533,26 +495,64 @@ class VinitiWebScraperService(
                 wait.until { tdTag.findElements(By.tagName("a")).isNotEmpty() }
             }
 
-            linkTagList = tdTag.findElements(By.tagName("a"))
+            // Ссылки на страницы
+            val linkTagList = tdTag.findElements(By.tagName("a"))
 
             // Содержимое тега с номером страницы
-            pageNumber = tdTag.findElement(By.tagName("span")).text
-            println("Номер текущей страницы: $pageNumber")
+            currentPageNumber = tdTag.findElement(By.tagName("span")).text
+            println("Номер текущей страницы: $currentPageNumber")
 
-            val currentFirstPageSymbol = linkTagList[0].getAttribute("innerHTML")!!
-
-            // Если многоточие на 1 странице, произошло смещение на новый набор
-            if (currentFirstPageSymbol == "..." && !offsetDone) {
-                pageIndex--
-                offsetDone = true
+            // Обновление состояния страницы
+            if (updateKeywordPageState(linkTagList, currentPageNumber)) {
+                break
             }
 
-        } while (pageIndex < linkTagList.size)
+        } while (true)
+
 
         // Закрытие текущего окна, переключение на основное (fraNode)
         closeWindow(mainWindow)
 
         return keywordList
+    }
+
+    fun updateKeywordPageState(linkTagList: List<WebElement>, currentPageNumber: String): Boolean {
+
+        val linkTextList = linkTagList.map { it.getAttribute("innerHTML") }
+
+        for ((i, linkText) in linkTextList.withIndex()) {
+
+            // ... в начале списка не интересует
+            if (i == 0 && linkText == "...") {
+                continue
+            }
+            // Если это число
+            else if (linkText != "...") {
+
+                // Числовое представление
+                val currentPageInt = currentPageNumber.toInt()
+                val iteratePageInt = linkText!!.toInt()
+
+                // Если номер страницы по ссылке больше текущей страницы, переходим на следующую страницу
+                if (iteratePageInt > currentPageInt) {
+
+                    // Переход на следующую страницу
+                    wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
+                    return false
+                }
+
+            }
+            // Не число, значит переход на следующий набор страниц
+            else {
+
+                // Переход на следующую страницу
+                wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
+                return false
+            }
+
+        }
+
+        return true
     }
 
     fun openWindow(clickableTag: WebElement): String {
