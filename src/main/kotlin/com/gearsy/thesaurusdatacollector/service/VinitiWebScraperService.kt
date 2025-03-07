@@ -125,7 +125,34 @@ class VinitiWebScraperService(
         println("Найден Form1")
 
         // Чтение содержимого и дочерних рубрик
-        val vinitiRubricatorNode = parseRubricDescription(nodeViewFormTag)
+        var attempt = 0
+        val maxAttempts = 3
+        var vinitiRubricatorNode: AbstractRubricatorNode? = null
+        while (attempt < maxAttempts) {
+            try {
+                attempt++
+                vinitiRubricatorNode = parseRubricDescription(nodeViewFormTag)
+            }
+            catch (e: Exception) {
+                println("\nОшибка при чтении описания рубрики, вторая попытка\n")
+
+                // Закрываем все открытые окна, кроме главного
+                val mainWindow = driver.windowHandle
+                driver.windowHandles.filter { it != mainWindow }.forEach { window ->
+                    driver.switchTo().window(window).close()
+                }
+
+                // Переключаемся обратно на fraNode
+                driver.switchTo().defaultContent()
+                wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("fraNode")))
+
+                if (attempt >= maxAttempts) {
+                    println("Не удалось успешно обработать рубрику после $maxAttempts попыток.")
+                    throw Exception()
+                }
+            }
+        }
+
 
         // Вернуться на фрейм списка
         driver.switchTo().defaultContent()
@@ -280,12 +307,27 @@ class VinitiWebScraperService(
         // Все строки таблицы
         var tableRowTagList: List<WebElement>
         try {
-            tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(30))
+            tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(40))
                 .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]")))
         }
         catch (e: Exception) {
-            tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(30))
-                .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]")))
+            try {
+                tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(40))
+                    .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]")))
+            }
+            catch (e: Exception) {
+                try {
+                    tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(40))
+                        .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]")))
+                }
+                catch (e: Exception) {
+                    return CSCSTIRubricatorNode(
+                        "УПАЛО",
+                        rubricName,
+                        null
+                    )
+                }
+            }
         }
 
         // Строка с шифром
@@ -472,7 +514,13 @@ class VinitiWebScraperService(
                 }
             }
 
-            wait.until(ExpectedConditions.elementToBeClickable(linkTagList[pageIndex])).click()
+            // Поддержки более 20 страниц нет
+            try {
+                wait.until(ExpectedConditions.elementToBeClickable(linkTagList[pageIndex])).click()
+            }
+            catch (e: IndexOutOfBoundsException) {
+                break
+            }
 
             // После обновления страницы теги заново ищутся
             tdTag = getKeywordPageTable()
@@ -490,10 +538,6 @@ class VinitiWebScraperService(
             // Содержимое тега с номером страницы
             pageNumber = tdTag.findElement(By.tagName("span")).text
             println("Номер текущей страницы: $pageNumber")
-
-            if (pageNumber == "10") {
-                println()
-            }
 
             val currentFirstPageSymbol = linkTagList[0].getAttribute("innerHTML")!!
 

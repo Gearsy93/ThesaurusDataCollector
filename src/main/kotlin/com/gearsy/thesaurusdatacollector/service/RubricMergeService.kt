@@ -14,93 +14,85 @@ class RubricMergeService {
     // Маппер объектов для дереализации
     val objectMapper = jacksonObjectMapper()
 
-    fun enrichCSCSTIRootRubricWithVinitiKeyword (cscstiRubricCipher: String, vinitiRubricCipher: String) {
+    fun enrichCSCSTIRootRubricWithVinitiKeyword(cscstiRubricCipher: String, vinitiRubricCiphers: String) {
+        val objectMapper = ObjectMapper()
 
         // Загрузка содержимого рубрики ГРНТИ
         val cscstiFilePath = "src/main/resources/output/rubricator/cscsti/${cscstiRubricCipher}.json"
         val cscstiFileContent = File(cscstiFilePath).readText(Charsets.UTF_8)
         val cscstiJsonNode = objectMapper.readTree(cscstiFileContent)
 
+        // Разбираем переданные шифры ВИНИТИ (например, "691,692")
+        val vinitiCiphers = vinitiRubricCiphers.split(",").map { it.trim() }
 
-        // Загрузка содержимого рубрики ВИНИТИ
-        val vinitiFilePath = "src/main/resources/output/rubricator/viniti/${vinitiRubricCipher}.json"
-        val vinitiFileContent = File(vinitiFilePath).readText(Charsets.UTF_8)
-        val vinitiJsonNode = objectMapper.readTree(vinitiFileContent)
+        // Загружаем все файлы ВИНИТИ и собираем ключевые слова
+        val vinitiKeywordsMap = mutableMapOf<String, MutableSet<String>>()
 
-        // Парсинг структур для обогащения
-        val cscstiJsonNodeEnriched = parseJsonToEnrich(cscstiJsonNode, vinitiJsonNode)
+        for (vinitiCipher in vinitiCiphers) {
+            val vinitiFilePath = "src/main/resources/output/rubricator/viniti/${vinitiCipher}.json"
+            val vinitiFile = File(vinitiFilePath)
+
+            if (!vinitiFile.exists()) {
+                println("Файл $vinitiFilePath не найден, пропускаем.")
+                continue
+            }
+
+            val vinitiJsonNode = objectMapper.readTree(vinitiFile)
+            extractVinitiKeywords(vinitiJsonNode, vinitiKeywordsMap)
+        }
+
+        // Обогащаем рубрики ГРНТИ ключевыми словами из ВИНИТИ
+        val cscstiJsonNodeEnriched = updateCSCSTI(cscstiJsonNode, vinitiKeywordsMap, objectMapper)
 
         // Сериализация объекта
-        val cscstiJsonNodeEnrichedText = objectMapper.writeValueAsString(cscstiJsonNodeEnriched)
+        val cscstiJsonNodeEnrichedText = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(cscstiJsonNodeEnriched)
 
         // Сохранение итоговой структуры в JSON-файл
         val cscstiEnrichFilePath = "src/main/resources/output/rubricator/cscstiEnrichedWithViniti/${cscstiRubricCipher}.json"
         File(cscstiEnrichFilePath).writeText(cscstiJsonNodeEnrichedText)
 
+        println("Файл сохранен: $cscstiEnrichFilePath")
     }
 
-    fun parseJsonToEnrich(cscstiJsonNode: JsonNode, vinitiJsonNode: JsonNode): JsonNode {
-        val objectMapper = ObjectMapper()
-
-        // Карта соответствия: ключ – cipher ВИНИТИ, значение – ключевые слова
-        val vinitiKeywordsMap = mutableMapOf<String, MutableSet<String>>()
-
-        fun extractVinitiKeywords(node: JsonNode) {
-            val vinitiParentCipher = node.get("vinitiParentNodeCipher")?.asText() ?: ""
-            if (vinitiParentCipher.isNotBlank()) {
-                val keywords = node.get("termList")?.map { it.asText() }?.toMutableSet() ?: mutableSetOf()
-                vinitiKeywordsMap.merge(vinitiParentCipher, keywords) { old, new -> old.union(new).toMutableSet() }
-            }
-            node.get("children")?.forEach { extractVinitiKeywords(it) }
+    // 1️⃣ Извлекаем ключевые слова из ВИНИТИ
+    private fun extractVinitiKeywords(node: JsonNode, vinitiKeywordsMap: MutableMap<String, MutableSet<String>>) {
+        val vinitiParentCipher = node.get("vinitiParentNodeCipher")?.asText() ?: ""
+        if (vinitiParentCipher.isNotBlank()) {
+            val keywords = node.get("termList")?.map { it.asText() }?.toMutableSet() ?: mutableSetOf()
+            vinitiKeywordsMap.merge(vinitiParentCipher, keywords) { old, new -> old.union(new).toMutableSet() }
         }
-        extractVinitiKeywords(vinitiJsonNode)
+        node.get("children")?.forEach { extractVinitiKeywords(it, vinitiKeywordsMap) }
+    }
 
-        fun updateCSCSTI(node: JsonNode): ObjectNode {
-            val cipher = node.get("cipher")?.asText() ?: return node as ObjectNode
-            val existingKeywords = node.get("termList")?.map { it.asText() }?.toMutableSet() ?: mutableSetOf()
-            val updatedKeywords = mutableListOf<Pair<String, Int>>() // Ключевые слова + rubricatorId
+    // 2️⃣ Обновляем структуру ГРНТИ
+    private fun updateCSCSTI(node: JsonNode, vinitiKeywordsMap: MutableMap<String, MutableSet<String>>, objectMapper: ObjectMapper): JsonNode {
+        val cipher = node.get("cipher")?.asText() ?: return node
 
-            // Добавляем ключевые слова из ГРНТИ (rubricatorId = 1)
-            existingKeywords.forEach { updatedKeywords.add(it to 1) }
+        // Собираем ключевые слова (изначальные + из ВИНИТИ)
+        val existingKeywords = node.get("termList")?.map { it.asText() }?.toMutableSet() ?: mutableSetOf()
+        val vinitiKeywords = vinitiKeywordsMap[cipher] ?: emptySet()
 
-            // Добавляем ключевые слова из ВИНИТИ (rubricatorId = 2)
-            vinitiKeywordsMap[cipher]?.forEach { updatedKeywords.add(it to 2) }
+        val updatedKeywords = (existingKeywords + vinitiKeywords).toMutableSet() // Убираем дубликаты
 
-            // Создаём объект без дублирующего `content`
-            val enrichedNode = node.deepCopy<ObjectNode>()
+        // Создаём объект без дублирующего `content`
+        val enrichedNode = node.deepCopy<ObjectNode>()
 
-            // Обновляем `termList`, создавая список объектов с `rubricatorId`
-            val newTermList = objectMapper.createArrayNode()
-            updatedKeywords.forEach { (keyword, rubricatorId) ->
-                val termObject = objectMapper.createObjectNode()
-                termObject.put("content", keyword)
-                termObject.put("rubricatorId", rubricatorId)
-                newTermList.add(termObject)
-            }
-            enrichedNode.set<ArrayNode>("termList", newTermList)
-
-            // Рекурсивно обновляем дочерние узлы
-            val childrenArray = objectMapper.createArrayNode()
-            node.get("children")?.forEach { childrenArray.add(updateCSCSTI(it)) }
-            enrichedNode.set<ArrayNode>("children", childrenArray)
-
-            return enrichedNode
+        // Обновляем `termList`, создавая список объектов с `rubricatorId`
+        val newTermList = objectMapper.createArrayNode()
+        updatedKeywords.forEach { keyword ->
+            val termObject = objectMapper.createObjectNode()
+            termObject.put("content", keyword)
+            termObject.put("rubricatorId", if (existingKeywords.contains(keyword)) 1 else 2) // 1 - ГРНТИ, 2 - ВИНИТИ
+            newTermList.add(termObject)
         }
+        enrichedNode.set<ArrayNode>("termList", newTermList)
 
-        // Создаем корневой узел JSON без дублирования `content`
-        val rootJson = objectMapper.createObjectNode()
+        // Рекурсивно обновляем дочерние узлы
+        val childrenArray = objectMapper.createArrayNode()
+        node.get("children")?.forEach { childrenArray.add(updateCSCSTI(it, vinitiKeywordsMap, objectMapper)) }
+        enrichedNode.set<ArrayNode>("children", childrenArray)
 
-        // Добавляем поле `rubricatorId` (информационные поля) **только один раз**
-        val rubricatorIdNode = objectMapper.createObjectNode()
-        rubricatorIdNode.put("1", "Государственный рубрикатор научно-технической информации")
-        rubricatorIdNode.put("2", "Рубрикатор отраслей знаний ВИНИТИ РАН")
-        rootJson.set<ObjectNode>("rubricatorId", rubricatorIdNode)
-
-        // Добавляем `content`, но сам `content` не вложен в `content`
-        val updatedContent = updateCSCSTI(cscstiJsonNode)
-        rootJson.set<ObjectNode>("content", updatedContent)
-
-        return rootJson
+        return enrichedNode
     }
 
     fun linkRubricParse(cscstiRubricCipher: String) {
