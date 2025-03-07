@@ -137,10 +137,16 @@ class VinitiWebScraperService(
                 println("\nОшибка при чтении описания рубрики, вторая попытка\n")
 
                 // Закрываем все открытые окна, кроме главного
-                val mainWindow = driver.windowHandle
-                driver.windowHandles.filter { it != mainWindow }.forEach { window ->
-                    driver.switchTo().window(window).close()
-                }
+                val mainWindow = driver.windowHandles.first() // Запоминаем главное окно
+                driver.windowHandles
+                    .filter { it != mainWindow } // Закрываем только не главное окно
+                    .forEach { window ->
+                        driver.switchTo().window(window).close()
+                    }
+
+                // Возвращаемся в главное окно
+                driver.switchTo().window(mainWindow)
+
 
                 // Переключаемся обратно на fraNode
                 driver.switchTo().defaultContent()
