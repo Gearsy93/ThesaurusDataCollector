@@ -125,36 +125,7 @@ class VinitiWebScraperService(
         println("Найден Form1")
 
         // Чтение содержимого и дочерних рубрик
-        var attempt = 0
-        val maxAttempts = 3
-        var vinitiRubricatorNode: AbstractRubricatorNode? = null
-        while (attempt < maxAttempts) {
-            try {
-                attempt++
-                vinitiRubricatorNode = parseRubricDescription(nodeViewFormTag)
-            }
-            catch (e: Exception) {
-                println("\nОшибка при чтении описания рубрики, вторая попытка\n")
-
-                // Закрываем все открытые окна, кроме главного
-                val mainWindow = driver.windowHandles.first() // Запоминаем главное окно
-                driver.windowHandles
-                    .filter { it != mainWindow } // Закрываем только не главное окно
-                    .forEach { window ->
-                        driver.switchTo().window(window).close()
-                    }
-
-                // Переключаемся обратно на fraNode
-                driver.switchTo().defaultContent()
-                wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("fraNode")))
-
-                if (attempt >= maxAttempts) {
-                    println("Не удалось успешно обработать рубрику после $maxAttempts попыток.")
-                    throw Exception()
-                }
-            }
-        }
-
+        val vinitiRubricatorNode = parseRubricDescription(nodeViewFormTag)
 
         // Вернуться на фрейм списка
         driver.switchTo().defaultContent()
@@ -344,13 +315,14 @@ class VinitiWebScraperService(
             return null
         }
 
-        // Ссылка на окно с ключевыми словами
-        val openKeywordsPopupLinkTag = WebDriverWait(driver, Duration.ofSeconds(30))
-            .until(ExpectedConditions.elementToBeClickable(By.xpath(".//a[contains(@onclick, 'OpenKeywords')]")))
-        println("Окно ключевые")
+//        // Ссылка на окно с ключевыми словами
+//        val openKeywordsPopupLinkTag = WebDriverWait(driver, Duration.ofSeconds(30))
+//            .until(ExpectedConditions.elementToBeClickable(By.xpath(".//a[contains(@onclick, 'OpenKeywords')]")))
+//        println("Окно ключевые")
 
         // Извлечение ключевых слов из открываемого окна
-        val keywordList = processKeywordWindow(openKeywordsPopupLinkTag)
+//        val keywordList = processKeywordWindow(openKeywordsPopupLinkTag)
+        val keywordList = null
 
 
         if (currentRubricator == "cscsti") {
@@ -387,6 +359,39 @@ class VinitiWebScraperService(
             throw Exception("Рубрикатор не поддерживается")
         }
     }
+
+//    private fun processKeywordChapter(): List<String> {
+//
+//        // Span-тег
+//        val keywordSpanTag: WebElement
+//
+//        try {
+//            WebDriverWait(driver, Duration.ofSeconds(10))
+//                .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.id(".//kwData")))
+//        }
+//        catch (_: Exception) {
+//            return mutableListOf()
+//        }
+//
+//        keywordSpanTag = driver.findElement(By.id(".//kwData"))
+//
+//
+//        // Ожидание загрузки всех td элементов
+//         WebDriverWait(driver, Duration.ofSeconds(40))
+//                        .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath(".//td")))
+//
+//        // Тело таблицы
+//        val keywordTable = keywordSpanTag.findElement(By.tagName("tbody"))
+//
+//        // tr элементы
+//        val tdTagList = keywordTable.findElements(By.tagName("tr"))
+//
+//        val keywordList = tdTagList.map { it.findElement(By.tagName("td")).getAttribute("innerHTML") }
+//
+//        println()
+//
+//        return keywordList
+//    }
 
     fun processMappingWindows(schemaMappingTableTag: WebElement): String {
 
@@ -606,7 +611,7 @@ class VinitiWebScraperService(
             .pollingEvery(Duration.ofMillis(500)) // Частота проверок
             .ignoring(NoSuchElementException::class.java) // Игнорируем отсутствие элемента
             .ignoring(ElementClickInterceptedException::class.java) // Если элемент перекрыт другим
-            .ignoring(TimeoutException::class.java) // Если элемент долго загружается
+            .ignoring(Exception::class.java) // Если элемент долго загружается
 
         try {
             val element = customWait.until {
