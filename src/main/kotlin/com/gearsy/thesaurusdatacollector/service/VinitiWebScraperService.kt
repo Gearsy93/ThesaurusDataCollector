@@ -337,7 +337,7 @@ class VinitiWebScraperService(
 
         // Оригинальный шифр
         val originalCipher = cipherRowTag.findElement(By.className("NodeFieldValue")).getAttribute("innerHTML")!!
-        println("Шифр")
+        println("Шифр: $originalCipher")
 
         // Аспекты не рассматриваются в реализации
         if (originalCipher.lowercase().contains("аспект")) {
@@ -411,7 +411,7 @@ class VinitiWebScraperService(
             val customWait = FluentWait(driver)
                 .withTimeout(Duration.ofSeconds(1.5.toLong()))   // Максимальное время ожидания
                 .pollingEvery(Duration.ofMillis(500)) // Интервал проверки наличия элемента
-                .ignoring(org.openqa.selenium.NoSuchElementException::class.java) // Игнорируем ошибку отсутствия элемента
+                .ignoring(Exception::class.java) // Игнорируем ошибку отсутствия элемента
 
             val elements = customWait.until {
                 driver.findElements(By.xpath(".//a[contains(@onclick, 'SetWinLocation')]"))
@@ -473,7 +473,7 @@ class VinitiWebScraperService(
         do {
 
             // Ожидание загрузки таблицы
-            val tdTag = getKeywordPageTable()
+            var tdTag = getKeywordPageTable()
 
             // Ожидание подгрузки таблицы
             val keywordTableTag = wait.until(ExpectedConditions.presenceOfElementLocated(By.className("Grid")))
@@ -487,12 +487,24 @@ class VinitiWebScraperService(
             keywordList.addAll(keywordTagList.map { keywordTag -> keywordTag.findElement(By.tagName("td")).text })
             println("Все ключевые слова с новыми: $keywordList")
 
-            // Ожидание загрузки ссылок
+            val fluentWait = FluentWait(tdTag)
+                .withTimeout(Duration.ofSeconds(40))  // Максимальное ожидание
+                .pollingEvery(Duration.ofMillis(500)) // Частота проверок
+                .ignoring(Exception::class.java) // Игнорируем ошибки
+
             try {
-                wait.until { tdTag.findElements(By.tagName("a")).isNotEmpty() }
-            }
-            catch (e: Exception) {
-                wait.until { tdTag.findElements(By.tagName("a")).isNotEmpty() }
+                fluentWait.until { tdTag.findElements(By.tagName("a")).isNotEmpty() }
+            } catch (e: Exception) {
+                println("Ошибка при ожидании загрузки ссылок: ${e.message}")
+
+                tdTag = getKeywordPageTable()
+
+                try {
+                    fluentWait.until { tdTag.findElements(By.tagName("a")).isNotEmpty() }
+                }
+                catch (e1: Exception) {
+                    println("Ошибка при ожидании загрузки ссылок: ${e.message}")
+                }
             }
 
             // Ссылки на страницы
@@ -518,38 +530,66 @@ class VinitiWebScraperService(
 
     fun updateKeywordPageState(linkTagList: List<WebElement>, currentPageNumber: String): Boolean {
 
-        val linkTextList = linkTagList.map { it.getAttribute("innerHTML") }
+        try {
 
-        for ((i, linkText) in linkTextList.withIndex()) {
+            var linkTextList: List<String>? = mutableListOf()
+            val fluentWait = FluentWait(driver)
+                .withTimeout(Duration.ofSeconds(10))  // Общее время ожидания
+                .pollingEvery(Duration.ofMillis(500)) // Частота проверок
+                .ignoring(Exception::class.java) // Игнорируем ошибки
 
-            // ... в начале списка не интересует
-            if (i == 0 && linkText == "...") {
-                continue
-            }
-            // Если это число
-            else if (linkText != "...") {
-
-                // Числовое представление
-                val currentPageInt = currentPageNumber.toInt()
-                val iteratePageInt = linkText!!.toInt()
-
-                // Если номер страницы по ссылке больше текущей страницы, переходим на следующую страницу
-                if (iteratePageInt > currentPageInt) {
-
-                    // Переход на следующую страницу
-                    wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
-                    return false
+            try {
+                linkTextList = fluentWait.until {
+                    val texts = linkTagList.mapNotNull { it.getAttribute("innerHTML") }
+                    if (texts.isNotEmpty() && texts.all { it.isNotBlank() }) texts else null
                 }
 
-            }
-            // Не число, значит переход на следующий набор страниц
-            else {
-
-                // Переход на следующую страницу
-                wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
-                return false
+                println("Загруженные атрибуты innerHTML: $linkTextList")
+            } catch (e: Exception) {
+                println("Ошибка при ожидании загрузки атрибутов: ${e.message}")
             }
 
+            // Больше 20 страниц считывать нет ресурса
+            if (currentPageNumber == "20") {
+                return true
+            }
+
+            if (linkTextList != null) {
+                for ((i, linkText) in linkTextList.withIndex()) {
+
+                    // ... в начале списка не интересует
+                    if (i == 0 && linkText == "...") {
+                        continue
+                    }
+                    // Если это число
+                    else if (linkText != "...") {
+
+                        // Числовое представление
+                        val currentPageInt = currentPageNumber.toInt()
+                        val iteratePageInt = linkText.toInt()
+
+                        // Если номер страницы по ссылке больше текущей страницы, переходим на следующую страницу
+                        if (iteratePageInt > currentPageInt) {
+
+                            // Переход на следующую страницу
+                            wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
+                            return false
+                        }
+
+                    }
+                    // Не число, значит переход на следующий набор страниц
+                    else {
+
+                        // Переход на следующую страницу
+                        wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
+                        return false
+                    }
+
+                }
+            }
+        }
+        catch (e: Exception) {
+            println(e)
         }
 
         return true
