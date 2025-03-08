@@ -7,18 +7,17 @@ import com.gearsy.thesaurusdatacollector.model.AbstractRubricatorNode
 import com.gearsy.thesaurusdatacollector.model.VinitiRubricatorNode
 import io.github.bonigarcia.wdm.WebDriverManager
 import jakarta.annotation.PreDestroy
-import org.openqa.selenium.By
-import org.openqa.selenium.ElementClickInterceptedException
-import org.openqa.selenium.NoSuchElementException
-import org.openqa.selenium.WebElement
+import org.openqa.selenium.*
 import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.support.ui.ExpectedConditions
 import org.openqa.selenium.support.ui.FluentWait
 import org.openqa.selenium.support.ui.WebDriverWait
 import org.springframework.stereotype.Service
+import java.io.BufferedWriter
 import java.io.File
+import java.io.FileWriter
+import java.io.PrintWriter
 import java.time.Duration
-import java.util.concurrent.TimeoutException
 
 @Service
 class VinitiWebScraperService(
@@ -30,11 +29,31 @@ class VinitiWebScraperService(
     private lateinit var wait: WebDriverWait
     private val currentRubricator = "viniti"
 
+    // Путь к файлу
+    lateinit var filePathR: String
+
+    // Открываем файл в режиме добавления (append=true) один раз в начале работы алгоритма
+    lateinit var fileWriter: FileWriter
+    lateinit var bufferedWriter: BufferedWriter
+    lateinit var printWriter: PrintWriter
+
+    var read = false
+    var readAll = false
+
+    // Маппер объектов для сериализации
+    val objectMapper = jacksonObjectMapper()
+
     fun scrapeRubricFromTree(rubricCipher: String) {
+
+        filePathR = "src/main/resources/output/rubricator/${currentRubricator}/${rubricCipher}_r.json"
+
+        fileWriter = FileWriter(filePathR, true)
+        bufferedWriter = BufferedWriter(fileWriter)
+        printWriter = PrintWriter(bufferedWriter)
 
         // Инициализация веб-драйвера
         driver = ChromeDriver()
-        wait = WebDriverWait(driver, Duration.ofSeconds(6))
+        wait = WebDriverWait(driver, Duration.ofSeconds(1))
         WebDriverManager.chromedriver().setup()
 
 
@@ -45,8 +64,18 @@ class VinitiWebScraperService(
             driver.get(externalApiProperties.viniti.rubricator.url)
         }
 
-        // Основной методы работы со страницей
-        getRubricHierarchy(rubricCipher)
+        try {
+            // Основной методы работы со страницей
+            getRubricHierarchy(rubricCipher)
+        }
+        catch (ex: Exception) {
+            Runtime.getRuntime().addShutdownHook(Thread {
+
+                writeToFileSafe("\n\n\n")
+                printWriter.close()
+            })
+            throw ex
+        }
     }
 
     @PreDestroy
@@ -68,9 +97,6 @@ class VinitiWebScraperService(
 
         // Список корневых рубрик для получения количества корневых рубрик
         val upperLevelRubricTagList = rubricListTag.findElements(By.className("closed"))
-
-        // Маппер объектов для сериализации
-        val objectMapper = jacksonObjectMapper()
 
         // Поиск тега необходимой рубрики
         val upperRubricTag = upperLevelRubricTagList.firstOrNull { it.getAttribute("id") == rubricCipher }
@@ -106,9 +132,47 @@ class VinitiWebScraperService(
         println("Найден NodeIconClick")
         println(expandRubricChildRubricsTag.text)
 
-        // Ожидание кликабельности ссылки разворачивания рубрики
-        wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
-        println("Кликнуто на развернуть рубрики")
+// Определяем тип рубрики по `class`
+        val rubricClass = rubricTag.getAttribute("class")
+
+        if (rubricClass == "leaf") {
+            // Нажатие на рубрику (независимо от наличия вложенных рубрик)
+            wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+            println("Клик выполнен по SelByCod")
+
+            println("Рубрика является листом, вложенных рубрик нет.")
+        } else if (rubricClass == "closed") {
+            println("Рубрика закрыта, раскрываем вложенные рубрики...")
+
+            // 1️⃣ Кликаем по кнопке раскрытия вложенных рубрик
+            wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+
+            // 2️⃣ Ожидаем, пока рубрика сменит `class` на `"open"`
+            val fluentWait = FluentWait(driver)
+                .withTimeout(Duration.ofSeconds(10))  // Максимальное ожидание
+                .pollingEvery(Duration.ofMillis(500)) // Проверка каждые 500 мс
+                .ignoring(StaleElementReferenceException::class.java, NoSuchElementException::class.java)
+
+            // 3️⃣ Ожидаем исчезновения индикатора загрузки
+            try {
+                fluentWait.until {
+                    val loadingIndicator = rubricTag.findElements(By.xpath(".//ul[@class='clsShown']//div[@class='clsLoadMsg']"))
+                    loadingIndicator.isEmpty() // Ждём, пока индикатор исчезнет
+                }
+                println("Индикатор загрузки исчез, вложенные рубрики загружены!")
+
+                // 4️⃣ Ожидаем появления хотя бы одного элемента <li> внутри <ul class="clsShown">
+                fluentWait.until {
+                    val childRubrics = rubricTag.findElements(By.xpath(".//ul[@class='clsShown']/li"))
+                    childRubrics.isNotEmpty()
+                }
+                println("Вложенные рубрики появились!")
+            } catch (e: TimeoutException) {
+                println("Не удалось дождаться загрузки вложенных рубрик!")
+            }
+        } else {
+            println("Рубрика уже открыта.")
+        }
 
         // Переключение на фрейм описания рубрики
         driver.switchTo().defaultContent()
@@ -124,7 +188,7 @@ class VinitiWebScraperService(
         val nodeViewFormTag = driver.findElement(By.name("Form1"))
         println("Найден Form1")
 
-        // Чтение содержимого и дочерних рубрик
+        // Чтение содержимого рубрики
         val vinitiRubricatorNode = parseRubricDescription(nodeViewFormTag)
 
         // Вернуться на фрейм списка
@@ -137,41 +201,53 @@ class VinitiWebScraperService(
             return null
         }
 
-        // Проверка наличия вложенных рубрик
-        try {
-
-            // Тег, содержащий список дочерних рубрик
-            val childRubricContainerTag = rubricTag.findElement(By.className("clsShown"))
-            println("Найден ul clsShown")
-
-            // Ожидание загрузки дочерних рубрик
+        if (rubricClass != "leaf") {
+            // Проверка наличия вложенных рубрик
             try {
-                wait.until { childRubricContainerTag.findElements(By.tagName("li")).isNotEmpty() }
-            }
-            catch (e: Exception) {
-                wait.until { childRubricContainerTag.findElements(By.tagName("li")).isNotEmpty() }
-            }
-            println("Загружены li")
 
-            // Список дочерних рубрик
-            val childRubricTagList = childRubricContainerTag.findElements(By.xpath("./li"))
-            println("Найдены li")
+                // Тег, содержащий список дочерних рубрик
+                wait.until { rubricTag.findElements(By.className("clsShown")).isNotEmpty() }
 
-            // Вложение рубрик через <i>
-            try {
-                val iContainerTag = childRubricContainerTag.findElement(By.xpath("./i"))
-                val iContainerChildTagList = iContainerTag.findElements(By.xpath("./li"))
-                childRubricTagList.addAll(iContainerChildTagList)
-            }
-            catch (_: NoSuchElementException) { }
+                val childRubricContainerTag = rubricTag.findElement(By.className("clsShown"))
+                println("Найден ul clsShown")
 
-            for (childRubricTag in childRubricTagList) {
-                val childNode = parseRubricRecursively(childRubricTag)
-                if (childNode != null) {
-                    vinitiRubricatorNode.addChildNode(childNode)
+                // Ожидание загрузки дочерних рубрик
+                try {
+                    wait.until { childRubricContainerTag.findElements(By.tagName("li")).isNotEmpty() }
                 }
-            }
-        } catch (_: NoSuchElementException) { println("Упало на поиске вложенных рубрик") }
+                catch (e: Exception) {
+                    wait.until { childRubricContainerTag.findElements(By.tagName("li")).isNotEmpty() }
+                }
+                println("Загружены li")
+
+                // Список дочерних рубрик
+                val childRubricTagList = childRubricContainerTag.findElements(By.xpath("./li"))
+                println("Найдены li")
+
+                // Вложение рубрик через <i>
+                try {
+                    val iContainerTag = childRubricContainerTag.findElement(By.xpath("./i"))
+                    val iContainerChildTagList = iContainerTag.findElements(By.xpath("./li"))
+                    childRubricTagList.addAll(iContainerChildTagList)
+                }
+                catch (_: Exception) { }
+
+                for (childRubricTag in childRubricTagList) {
+                    var childNode: AbstractRubricatorNode?
+                    try {
+                        childNode = parseRubricRecursively(childRubricTag)
+                    }
+                    catch (ex: Exception) {
+                        println("УПАЛО НА ЧТЕНИИ ДОЧЕРНИХ")
+                        childNode = null
+                    }
+                    if (childNode != null) {
+                        vinitiRubricatorNode.addChildNode(childNode)
+                    }
+                }
+            } catch (_: NoSuchElementException) { println("Упало на поиске вложенных рубрик") }
+            catch (_: TimeoutException) { println("Упало на поиске вложенных рубрик") }
+        }
 
         // Проверка наличия в текущей рубрике ссылок на другие рубрики
         try {
@@ -277,37 +353,50 @@ class VinitiWebScraperService(
         val rubricName = rubricNameValueTags[1].text
         println("Рубрика: $rubricName")
 
+
         // Все строки таблицы
+        val wait = FluentWait(driver)
+            .withTimeout(Duration.ofSeconds(40))  // Общее ожидание
+            .pollingEvery(Duration.ofMillis(500)) // Проверка каждые 500 мс
+            .ignoring(java.util.NoSuchElementException::class.java)
+
+
         var tableRowTagList: List<WebElement>
         try {
-            tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(40))
-                .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]")))
-        }
-        catch (e: Exception) {
-            try {
-                tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(40))
-                    .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]")))
-            }
-            catch (e: Exception) {
-                try {
-                    tableRowTagList = WebDriverWait(driver, Duration.ofSeconds(40))
-                        .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]")))
+             tableRowTagList = try {
+                wait.until {
+                    val elements = driver.findElements(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]"))
+                    if (elements.isNotEmpty()) elements else null
                 }
-                catch (e: Exception) {
-                    return CSCSTIRubricatorNode(
-                        "УПАЛО",
-                        rubricName,
-                        null
-                    )
-                }
+            } catch (e: Exception) {
+                println("Ошибка при поиске таблицы: ${e.message}")
+                emptyList() // Возвращаем пустой список, чтобы избежать null
             }
         }
+        catch (_: Exception) {
+            tableRowTagList = try {
+                wait.until {
+                    val elements = driver.findElements(By.xpath("//tr[.//td[contains(@class, 'NodeFieldName')]]"))
+                    if (elements.isNotEmpty()) elements else null
+                }
+            } catch (e: Exception) {
+                println("Ошибка при поиске таблицы: ${e.message}")
+                emptyList() // Возвращаем пустой список, чтобы избежать null
+            }
+        }
+        println("Пережил поиск NodeFieldName")
 
         // Строка с шифром
-        val cipherRowTag = tableRowTagList.first { tableRowTag -> tableRowTag.findElement(By.className("NodeFieldName")).getAttribute("innerHTML") == "Ориг. шифр" }
+        var originalCipher: String
+        try {
+            val cipherRowTag = tableRowTagList.first { tableRowTag -> tableRowTag.findElement(By.className("NodeFieldName")).getAttribute("innerHTML") == "Ориг. шифр" }
+            originalCipher = cipherRowTag.findElement(By.className("NodeFieldValue")).getAttribute("innerHTML")!!
+        }
+        catch (e: Exception) {
+            originalCipher = "УПАЛО_УПАЛО"
+        }
 
         // Оригинальный шифр
-        val originalCipher = cipherRowTag.findElement(By.className("NodeFieldValue")).getAttribute("innerHTML")!!
         println("Шифр: $originalCipher")
 
         // Аспекты не рассматриваются в реализации
@@ -315,15 +404,29 @@ class VinitiWebScraperService(
             return null
         }
 
-//        // Ссылка на окно с ключевыми словами
-//        val openKeywordsPopupLinkTag = WebDriverWait(driver, Duration.ofSeconds(30))
-//            .until(ExpectedConditions.elementToBeClickable(By.xpath(".//a[contains(@onclick, 'OpenKeywords')]")))
-//        println("Окно ключевые")
+        if (originalCipher == "") {
+            read = true
+        }
+
+        // Ссылка на окно с ключевыми словами
+        val openKeywordsPopupLinkTag = WebDriverWait(driver, Duration.ofSeconds(30))
+            .until(ExpectedConditions.elementToBeClickable(By.xpath(".//a[contains(@onclick, 'OpenKeywords')]")))
+        println("Окно ключевые")
 
         // Извлечение ключевых слов из открываемого окна
-//        val keywordList = processKeywordWindow(openKeywordsPopupLinkTag)
-        val keywordList = null
 
+        var keywordList: List<String>?
+
+        // Текущее окно
+        val mainWindow = driver.windowHandle
+        try {
+            keywordList = processKeywordWindow(openKeywordsPopupLinkTag)
+        }
+        catch (e: Exception) {
+            println("Закрытие лишних окон...")
+            closeAllWindowsExceptMain(mainWindow)
+            keywordList = listOf("УПАЛО_УПАЛО_УПАЛО")
+        }
 
         if (currentRubricator == "cscsti") {
             return CSCSTIRubricatorNode(
@@ -348,50 +451,83 @@ class VinitiWebScraperService(
             // Извлечение шифра рубрики ГРНТИ
             val cscstiRubricCipher = processMappingWindows(schemaMappingTableTagList[1])
 
-            return VinitiRubricatorNode(
+            val rubricNode = VinitiRubricatorNode(
                 originalCipher,
                 rubricName,
                 keywordList,
                 vinitiParentNodeCipher=cscstiRubricCipher
             )
+
+            writeToFileSafe(objectMapper.writeValueAsString(rubricNode))
+
+            return rubricNode
         }
         else {
             throw Exception("Рубрикатор не поддерживается")
         }
     }
 
-//    private fun processKeywordChapter(): List<String> {
-//
-//        // Span-тег
-//        val keywordSpanTag: WebElement
-//
-//        try {
-//            WebDriverWait(driver, Duration.ofSeconds(10))
-//                .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.id(".//kwData")))
-//        }
-//        catch (_: Exception) {
-//            return mutableListOf()
-//        }
-//
-//        keywordSpanTag = driver.findElement(By.id(".//kwData"))
-//
-//
-//        // Ожидание загрузки всех td элементов
-//         WebDriverWait(driver, Duration.ofSeconds(40))
-//                        .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath(".//td")))
-//
-//        // Тело таблицы
-//        val keywordTable = keywordSpanTag.findElement(By.tagName("tbody"))
-//
-//        // tr элементы
-//        val tdTagList = keywordTable.findElements(By.tagName("tr"))
-//
-//        val keywordList = tdTagList.map { it.findElement(By.tagName("td")).getAttribute("innerHTML") }
-//
-//        println()
-//
-//        return keywordList
-//    }
+    // Функция для безопасной записи строк в файл
+    fun writeToFileSafe(text: String) {
+        try {
+            printWriter.println(text) // Записываем строку
+            printWriter.flush() // Сбрасываем буфер, чтобы данные точно записались
+        } catch (e: Exception) {
+            println("Ошибка при записи в файл: ${e.message}")
+        }
+    }
+
+    private fun processKeywordChapter(): List<String> {
+
+        try {
+            WebDriverWait(driver, Duration.ofSeconds(10))
+                .until(ExpectedConditions.presenceOfElementLocated(By.id("kwData")))
+        }
+        catch (_: Exception) {
+            return listOf()
+        }
+
+        // Ожидание загрузки ключевых слов
+        val keywordSpanTag = waitForKwDataUpdate() ?: return listOf()
+
+        // Ожидание загрузки всех td элементов
+         WebDriverWait(driver, Duration.ofSeconds(40))
+                        .until(ExpectedConditions.presenceOfAllElementsLocatedBy(By.xpath(".//td")))
+
+        // Тело таблицы
+        val keywordTable: WebElement
+        try {
+            keywordTable = keywordSpanTag.findElement(By.tagName("tbody"))
+        }
+        catch (_: Exception) {
+            return listOf()
+        }
+
+        // tr элементы
+        val tdTagList = keywordTable.findElements(By.tagName("tr"))
+
+        if (tdTagList.size == 0) {
+            return listOf()
+        }
+
+        val keywordList = tdTagList.map { it.findElement(By.tagName("td")).getAttribute("innerHTML")!! }
+        println(keywordList)
+
+        return keywordList
+    }
+
+    fun waitForKwDataUpdate(): WebElement? {
+        val wait = FluentWait(driver)
+            .withTimeout(Duration.ofSeconds(15))  // Максимальное ожидание
+            .pollingEvery(Duration.ofMillis(500)) // Проверка каждые 500 мс
+            .ignoring(StaleElementReferenceException::class.java, NoSuchElementException::class.java) // Игнорируем ошибки
+
+        return wait.until {
+            val element = driver.findElement(By.id("kwData")) // Переопределяем элемент
+            val content = element.getAttribute("innerHTML")?.trim() ?: ""
+            if (!content.contains("Получение данных...")) element else null
+        }
+    }
 
     fun processMappingWindows(schemaMappingTableTag: WebElement): String {
 
@@ -426,14 +562,14 @@ class VinitiWebScraperService(
                 println("Элементы найдены")
             } else {
                 println("Элементы не найдены")
-                closeWindow(mainWindow)
+                closeAllWindowsExceptMain(mainWindow)
                 return ""
             }
         }
         catch (e: Exception) {
 
             // Отображения нет, закрытие текущего окна, переключение на основное (fraNode)
-            closeWindow(mainWindow)
+            closeAllWindowsExceptMain(mainWindow)
             return ""
         }
 
@@ -447,7 +583,7 @@ class VinitiWebScraperService(
         val cscstiRubricCipher = linkInner!!.split(" ")[0]
 
         // Закрытие текущего окна, переключение на основное (fraNode)
-        closeWindow(mainWindow)
+        closeAllWindowsExceptMain(mainWindow)
 
         return cscstiRubricCipher
     }
@@ -463,7 +599,7 @@ class VinitiWebScraperService(
             println("Нет ключевых слов")
 
             // Закрытие текущего окна, переключение на основное (fraNode)
-            closeWindow(mainWindow)
+            closeAllWindowsExceptMain(mainWindow)
 
             return null
         }
@@ -478,7 +614,7 @@ class VinitiWebScraperService(
         do {
 
             // Ожидание загрузки таблицы
-            var tdTag = getKeywordPageTable()
+            val tdTag = getKeywordPageTable()
 
             // Ожидание подгрузки таблицы
             val keywordTableTag = wait.until(ExpectedConditions.presenceOfElementLocated(By.className("Grid")))
@@ -493,23 +629,15 @@ class VinitiWebScraperService(
             println("Все ключевые слова с новыми: $keywordList")
 
             val fluentWait = FluentWait(tdTag)
-                .withTimeout(Duration.ofSeconds(40))  // Максимальное ожидание
+                .withTimeout(Duration.ofSeconds(5))  // Максимальное ожидание
                 .pollingEvery(Duration.ofMillis(500)) // Частота проверок
                 .ignoring(Exception::class.java) // Игнорируем ошибки
 
             try {
                 fluentWait.until { tdTag.findElements(By.tagName("a")).isNotEmpty() }
             } catch (e: Exception) {
-                println("Ошибка при ожидании загрузки ссылок: ${e.message}")
-
-                tdTag = getKeywordPageTable()
-
-                try {
-                    fluentWait.until { tdTag.findElements(By.tagName("a")).isNotEmpty() }
-                }
-                catch (e1: Exception) {
-                    println("Ошибка при ожидании загрузки ссылок: ${e.message}")
-                }
+                println("Ссылки не найдены (1 страница)")
+                break
             }
 
             // Ссылки на страницы
@@ -528,62 +656,45 @@ class VinitiWebScraperService(
 
 
         // Закрытие текущего окна, переключение на основное (fraNode)
-        closeWindow(mainWindow)
+        closeAllWindowsExceptMain(mainWindow)
 
         return keywordList
     }
 
     fun updateKeywordPageState(linkTagList: List<WebElement>, currentPageNumber: String): Boolean {
 
-        try {
+        var linkTextList: List<String>? = mutableListOf()
+        val fluentWait = FluentWait(driver)
+            .withTimeout(Duration.ofSeconds(7))  // Общее время ожидания
+            .pollingEvery(Duration.ofMillis(500)) // Частота проверок
+            .ignoring(Exception::class.java) // Игнорируем ошибки
 
-            var linkTextList: List<String>? = mutableListOf()
-            val fluentWait = FluentWait(driver)
-                .withTimeout(Duration.ofSeconds(10))  // Общее время ожидания
-                .pollingEvery(Duration.ofMillis(500)) // Частота проверок
-                .ignoring(Exception::class.java) // Игнорируем ошибки
+        linkTextList = fluentWait.until {
+            val texts = linkTagList.mapNotNull { it.getAttribute("innerHTML") }
+            if (texts.isNotEmpty() && texts.all { it.isNotBlank() }) texts else null
+        }
 
-            try {
-                linkTextList = fluentWait.until {
-                    val texts = linkTagList.mapNotNull { it.getAttribute("innerHTML") }
-                    if (texts.isNotEmpty() && texts.all { it.isNotBlank() }) texts else null
+        // Больше 20 страниц считывать нет ресурса
+        if (currentPageNumber == "20") {
+            return true
+        }
+
+        if (linkTextList != null) {
+            for ((i, linkText) in linkTextList.withIndex()) {
+
+                // ... в начале списка не интересует
+                if (i == 0 && linkText == "...") {
+                    continue
                 }
+                // Если это число
+                else if (linkText != "...") {
 
-                println("Загруженные атрибуты innerHTML: $linkTextList")
-            } catch (e: Exception) {
-                println("Ошибка при ожидании загрузки атрибутов: ${e.message}")
-            }
+                    // Числовое представление
+                    val currentPageInt = currentPageNumber.toInt()
+                    val iteratePageInt = linkText.toInt()
 
-            // Больше 20 страниц считывать нет ресурса
-            if (currentPageNumber == "20") {
-                return true
-            }
-
-            if (linkTextList != null) {
-                for ((i, linkText) in linkTextList.withIndex()) {
-
-                    // ... в начале списка не интересует
-                    if (i == 0 && linkText == "...") {
-                        continue
-                    }
-                    // Если это число
-                    else if (linkText != "...") {
-
-                        // Числовое представление
-                        val currentPageInt = currentPageNumber.toInt()
-                        val iteratePageInt = linkText.toInt()
-
-                        // Если номер страницы по ссылке больше текущей страницы, переходим на следующую страницу
-                        if (iteratePageInt > currentPageInt) {
-
-                            // Переход на следующую страницу
-                            wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
-                            return false
-                        }
-
-                    }
-                    // Не число, значит переход на следующий набор страниц
-                    else {
+                    // Если номер страницы по ссылке больше текущей страницы, переходим на следующую страницу
+                    if (iteratePageInt > currentPageInt) {
 
                         // Переход на следующую страницу
                         wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
@@ -591,10 +702,15 @@ class VinitiWebScraperService(
                     }
 
                 }
+                // Не число, значит переход на следующий набор страниц
+                else {
+
+                    // Переход на следующую страницу
+                    wait.until(ExpectedConditions.elementToBeClickable(linkTagList[i])).click()
+                    return false
+                }
+
             }
-        }
-        catch (e: Exception) {
-            println(e)
         }
 
         return true
@@ -658,21 +774,29 @@ class VinitiWebScraperService(
         return mainWindow
     }
 
-    fun closeWindow(mainWindow: String) {
+    fun closeAllWindowsExceptMain(mainWindow: String) {
+        val allWindows = driver.windowHandles
 
-        // Закрыть открытое окно и вернуться к основному
-        driver.close()
-        println("Закрыто окно")
+        for (window in allWindows) {
+            if (window != mainWindow) {
+                driver.switchTo().window(window)
+                driver.close()
+                println("Закрыто окно: $window")
+            }
+        }
 
+        // Переключаемся обратно на главное окно
         driver.switchTo().window(mainWindow)
         println("Переключено на главное окно")
 
+        // Переключаемся на главный фрейм
         driver.switchTo().defaultContent()
         println("Переключен на главный фрейм")
 
         wait.until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.id("fraNode")))
         println("Переключен на fraNode")
     }
+
 
     fun getKeywordPageTable(): WebElement {
         // Панель с перечислением страниц
