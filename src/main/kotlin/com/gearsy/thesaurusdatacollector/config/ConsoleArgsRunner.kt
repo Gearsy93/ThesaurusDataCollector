@@ -1,15 +1,19 @@
 package com.gearsy.thesaurusdatacollector.config
 
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.gearsy.thesaurusdatacollector.service.RubricMergeService
 import com.gearsy.thesaurusdatacollector.service.VinitiWebScraperService
 import org.springframework.boot.CommandLineRunner
 import org.springframework.stereotype.Component
+import java.io.File
 
 @Component
 class ConsoleArgsRunner(
     private val vinitiWebScraperService: VinitiWebScraperService,
     private val rubricMergeService: RubricMergeService
 ) : CommandLineRunner {
+
 
     override fun run(vararg args: String?) {
         val arguments = args.filterNotNull()

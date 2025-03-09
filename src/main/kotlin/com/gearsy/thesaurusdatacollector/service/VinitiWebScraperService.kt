@@ -201,28 +201,28 @@ class VinitiWebScraperService(
             return null
         }
 
-        if (read == false) {
-            if (vinitiRubricatorNode.cipher == "271" ||
-                vinitiRubricatorNode.cipher == "271.45" ||
-                vinitiRubricatorNode.cipher == "271.45.17" ||
-                vinitiRubricatorNode.cipher == "271.45.17.25") {
-
-            }
-            else if (vinitiRubricatorNode.cipher == "271.45.17.25.17") {
-                read = true
-            }
-            else {
-                try {
-                    wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
-                }
-                catch (e: Exception) {
-                    wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
-                }
-                println("Закрыт раскрытый список")
-
-                return vinitiRubricatorNode
-            }
-        }
+//        if (read == false) {
+//            if (vinitiRubricatorNode.cipher == "271" ||
+//                vinitiRubricatorNode.cipher == "271.45" ||
+//                vinitiRubricatorNode.cipher == "271.45.17" ||
+//                vinitiRubricatorNode.cipher == "271.45.17.25") {
+//
+//            }
+//            else if (vinitiRubricatorNode.cipher == "271.45.17.25.17") {
+//                read = true
+//            }
+//            else {
+//                try {
+//                    wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+//                }
+//                catch (e: Exception) {
+//                    wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+//                }
+//                println("Закрыт раскрытый список")
+//
+//                return vinitiRubricatorNode
+//            }
+//        }
 
         if (rubricClass != "leaf") {
             // Проверка наличия вложенных рубрик
@@ -652,7 +652,7 @@ class VinitiWebScraperService(
             println("Все ключевые слова с новыми: $keywordList")
 
             val fluentWait = FluentWait(tdTag)
-                .withTimeout(Duration.ofSeconds(5))  // Максимальное ожидание
+                .withTimeout(Duration.ofSeconds(2))  // Максимальное ожидание
                 .pollingEvery(Duration.ofMillis(500)) // Частота проверок
                 .ignoring(Exception::class.java) // Игнорируем ошибки
 
@@ -837,3 +837,41 @@ class VinitiWebScraperService(
         return tdTag
     }
 }
+
+data class Rubric(
+    val cipher: String,
+    val title: String,
+    val termList: List<String>? = null,
+    var children: MutableList<Rubric> = mutableListOf(),
+    val vinitiParentNodeCipher: String?
+)
+
+//fun convert() {
+//    val objectMapper = jacksonObjectMapper()
+//    val inputFilePath = "src/main/resources/output/rubricator/viniti/271_r.json"
+//    val outputFilePath = "src/main/resources/output/rubricator/viniti/271.json"
+//
+//    // Читаем файл построчно и парсим каждую строку в Rubric
+//    val rubricList = File(inputFilePath).readLines().map { objectMapper.readValue(it, Rubric::class.java) }
+//
+//    // Создаем Map для быстрого поиска рубрик по cipher
+//    val rubricMap = rubricList.associateBy { it.cipher }.toMutableMap()
+//
+//    // Список корневых рубрик
+//    val rootRubrics = mutableListOf<Rubric>()
+//
+//    for (rubric in rubricList) {
+//        val parentCipher = rubric.cipher.substringBeforeLast('.', missingDelimiterValue = "")
+//
+//        if (parentCipher.isNotEmpty() && rubricMap.containsKey(parentCipher)) {
+//            // Если нашли родительскую рубрику, добавляем текущую в ее children
+//            rubricMap[parentCipher]?.children?.add(rubric)
+//        } else {
+//            // Иначе, это корневой элемент
+//            rootRubrics.add(rubric)
+//        }
+//    }
+//
+//    // Записываем результат в корректный JSON с иерархией
+//    File(outputFilePath).writeText(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootRubrics))
+//}
