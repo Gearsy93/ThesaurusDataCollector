@@ -201,6 +201,29 @@ class VinitiWebScraperService(
             return null
         }
 
+        if (read == false) {
+            if (vinitiRubricatorNode.cipher == "271" ||
+                vinitiRubricatorNode.cipher == "271.45" ||
+                vinitiRubricatorNode.cipher == "271.45.17" ||
+                vinitiRubricatorNode.cipher == "271.45.17.25") {
+
+            }
+            else if (vinitiRubricatorNode.cipher == "271.45.17.25.17") {
+                read = true
+            }
+            else {
+                try {
+                    wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+                }
+                catch (e: Exception) {
+                    wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
+                }
+                println("Закрыт раскрытый список")
+
+                return vinitiRubricatorNode
+            }
+        }
+
         if (rubricClass != "leaf") {
             // Проверка наличия вложенных рубрик
             try {
