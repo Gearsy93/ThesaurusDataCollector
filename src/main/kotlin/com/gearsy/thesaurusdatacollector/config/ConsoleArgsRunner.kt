@@ -31,7 +31,7 @@ class ConsoleArgsRunner(
                     println("Выполняется: Спылесосить ГРНТИ с сайта ВИНИТИ для рубрики $rubricCipher")
                     vinitiWebScraperService.scrapeRubricFromTree(rubricCipher)
                 } else {
-                    println("Ошибка: флаг -parse_cscsti требует указания шифра рубрики.")
+                    println("Ошибка: флаг -parse_cscsti требует указания шифра рубрики")
                     printUsage()
                 }
             }
@@ -65,7 +65,7 @@ class ConsoleArgsRunner(
                     println("Заполнение ключевых слов по ссылочным рубрикам ГРНТИ $rubricCipher")
                     rubricMergeService.fillWithLinkRubricKeywords(rubricCipher)
                 } else {
-                    println("Ошибка: флаг -fill_link_keyword требует указания шифра рубрики.")
+                    println("Ошибка: флаг -fill_link_keyword требует указания шифра рубрики")
                     printUsage()
                 }
             }
@@ -80,11 +80,11 @@ class ConsoleArgsRunner(
         println(
             """
             Использование:
-              -parse_cscsti <cipher>         Извлечь структуру ГРНТИ с сайта ВИНИТИ для указанного шифра рубрики
-              -fillNeo4j <filename>          Заполнить схему Neo4j с указанным именем файла (без расширения)
-              -clearNeo4j                    Очистить базу данных Neo4j
-              -enrich_cscsti <cscsti> <viniti> Обогатить рубрику CSCSTI ключевыми словами из рубрики VINITI
-              -list_link_rubric <cipher>     Список ссылочных рубрик для рубрики ГРНТИ
+              -parse_cscsti <cipher>            Извлечь структуру ГРНТИ с сайта ВИНИТИ для указанного шифра рубрики
+              -fillNeo4j <filename>             Заполнить схему Neo4j с указанным именем файла (без расширения)
+              -clearNeo4j                       Очистить базу данных Neo4j
+              -enrich_cscsti <cscsti> <viniti>  Обогатить рубрику CSCSTI ключевыми словами из рубрики VINITI
+              -list_link_rubric <cipher>        Список ссылочных рубрик для рубрики ГРНТИ
             """.trimIndent()
         )
     }

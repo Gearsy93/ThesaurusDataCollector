@@ -4,11 +4,13 @@ import org.springframework.stereotype.Service
 import java.nio.file.Paths
 import kotlin.io.path.pathString
 
+// TODO Заготовка для парсинга pdf-тезаурусов
+
 @Service
 class PdfThesaurusParserService {
-
-    val thesaurusPdfFolder = Paths.get("src", "main", "resources", "input", "thesaurus", "pdf").pathString
-
+//
+//    val thesaurusPdfFolder = Paths.get("src", "main", "resources", "input", "thesaurus", "pdf").pathString
+//
 //    fun parsePdfFile(fileName: String): List<InionRanDescriptor> {
 //
 //

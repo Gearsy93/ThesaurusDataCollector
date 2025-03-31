@@ -38,7 +38,6 @@ class VinitiWebScraperService(
     lateinit var printWriter: PrintWriter
 
     var read = false
-    var readAll = false
 
     // Маппер объектов для сериализации
     val objectMapper = jacksonObjectMapper()
@@ -132,7 +131,7 @@ class VinitiWebScraperService(
         println("Найден NodeIconClick")
         println(expandRubricChildRubricsTag.text)
 
-// Определяем тип рубрики по `class`
+        // Определяем тип рубрики по `class`
         val rubricClass = rubricTag.getAttribute("class")
 
         if (rubricClass == "leaf") {
@@ -144,16 +143,16 @@ class VinitiWebScraperService(
         } else if (rubricClass == "closed") {
             println("Рубрика закрыта, раскрываем вложенные рубрики...")
 
-            // 1️⃣ Кликаем по кнопке раскрытия вложенных рубрик
+            // Кликаем по кнопке раскрытия вложенных рубрик
             wait.until(ExpectedConditions.elementToBeClickable(expandRubricChildRubricsTag)).click()
 
-            // 2️⃣ Ожидаем, пока рубрика сменит `class` на `"open"`
+            // Ожидаем, пока рубрика сменит `class` на `"open"`
             val fluentWait = FluentWait(driver)
                 .withTimeout(Duration.ofSeconds(10))  // Максимальное ожидание
                 .pollingEvery(Duration.ofMillis(500)) // Проверка каждые 500 мс
                 .ignoring(StaleElementReferenceException::class.java, NoSuchElementException::class.java)
 
-            // 3️⃣ Ожидаем исчезновения индикатора загрузки
+            // Ожидаем исчезновения индикатора загрузки
             try {
                 fluentWait.until {
                     val loadingIndicator = rubricTag.findElements(By.xpath(".//ul[@class='clsShown']//div[@class='clsLoadMsg']"))
@@ -161,7 +160,7 @@ class VinitiWebScraperService(
                 }
                 println("Индикатор загрузки исчез, вложенные рубрики загружены!")
 
-                // 4️⃣ Ожидаем появления хотя бы одного элемента <li> внутри <ul class="clsShown">
+                // Ожидаем появления хотя бы одного элемента <li> внутри <ul class="clsShown">
                 fluentWait.until {
                     val childRubrics = rubricTag.findElements(By.xpath(".//ul[@class='clsShown']/li"))
                     childRubrics.isNotEmpty()
@@ -200,7 +199,7 @@ class VinitiWebScraperService(
         if (vinitiRubricatorNode == null) {
             return null
         }
-
+// Место, с которого начнется парсинг
 //        if (read == false) {
 //            if (vinitiRubricatorNode.cipher == "271" ||
 //                vinitiRubricatorNode.cipher == "271.45" ||
@@ -225,6 +224,7 @@ class VinitiWebScraperService(
 //        }
 
         if (rubricClass != "leaf") {
+
             // Проверка наличия вложенных рубрик
             try {
 
@@ -274,7 +274,7 @@ class VinitiWebScraperService(
 
         // Проверка наличия в текущей рубрике ссылок на другие рубрики
         try {
-            // Чтение содержимого тега со списком ссылок на рубрики.//a[@title='Постоянная ссылка на данную рубрику']
+            // Чтение содержимого тега со списком ссылок на рубрики
             val linkCipherListTag = rubricTag.findElement(By.xpath("./*[@class='LinksList']"))
             vinitiRubricatorNode.linkCipherList = readLinkCipherListTag(linkCipherListTag)
         } catch (_: NoSuchElementException) {
@@ -407,7 +407,6 @@ class VinitiWebScraperService(
                 emptyList() // Возвращаем пустой список, чтобы избежать null
             }
         }
-        println("Пережил поиск NodeFieldName")
 
         // Строка с шифром
         var originalCipher: String
@@ -416,7 +415,7 @@ class VinitiWebScraperService(
             originalCipher = cipherRowTag.findElement(By.className("NodeFieldValue")).getAttribute("innerHTML")!!
         }
         catch (e: Exception) {
-            originalCipher = "УПАЛО_УПАЛО"
+            originalCipher = "ШИФР_НЕ_НАЙДЕН"
         }
 
         // Оригинальный шифр
@@ -436,8 +435,6 @@ class VinitiWebScraperService(
             .until(ExpectedConditions.elementToBeClickable(By.xpath(".//a[contains(@onclick, 'OpenKeywords')]")))
         println("Окно ключевые")
 
-        // Извлечение ключевых слов из открываемого окна
-
         var keywordList: List<String>?
 
         // Текущее окно
@@ -448,7 +445,7 @@ class VinitiWebScraperService(
         catch (e: Exception) {
             println("Закрытие лишних окон...")
             closeAllWindowsExceptMain(mainWindow)
-            keywordList = listOf("УПАЛО_УПАЛО_УПАЛО")
+            keywordList = listOf("КЛЮЧЕВЫЕ_СЛОВА_НЕ_ИЗВЛЕЧЕНЫ")
         }
 
         if (currentRubricator == "cscsti") {
@@ -493,8 +490,8 @@ class VinitiWebScraperService(
     // Функция для безопасной записи строк в файл
     fun writeToFileSafe(text: String) {
         try {
-            printWriter.println(text) // Записываем строку
-            printWriter.flush() // Сбрасываем буфер, чтобы данные точно записались
+            printWriter.println(text)
+            printWriter.flush()
         } catch (e: Exception) {
             println("Ошибка при записи в файл: ${e.message}")
         }
@@ -822,6 +819,7 @@ class VinitiWebScraperService(
 
 
     fun getKeywordPageTable(): WebElement {
+
         // Панель с перечислением страниц
         try {
             wait.until { driver.findElements(By.className("GridPager")).isNotEmpty() }
@@ -837,41 +835,3 @@ class VinitiWebScraperService(
         return tdTag
     }
 }
-
-data class Rubric(
-    val cipher: String,
-    val title: String,
-    val termList: List<String>? = null,
-    var children: MutableList<Rubric> = mutableListOf(),
-    val vinitiParentNodeCipher: String?
-)
-
-//fun convert() {
-//    val objectMapper = jacksonObjectMapper()
-//    val inputFilePath = "src/main/resources/output/rubricator/viniti/271_r.json"
-//    val outputFilePath = "src/main/resources/output/rubricator/viniti/271.json"
-//
-//    // Читаем файл построчно и парсим каждую строку в Rubric
-//    val rubricList = File(inputFilePath).readLines().map { objectMapper.readValue(it, Rubric::class.java) }
-//
-//    // Создаем Map для быстрого поиска рубрик по cipher
-//    val rubricMap = rubricList.associateBy { it.cipher }.toMutableMap()
-//
-//    // Список корневых рубрик
-//    val rootRubrics = mutableListOf<Rubric>()
-//
-//    for (rubric in rubricList) {
-//        val parentCipher = rubric.cipher.substringBeforeLast('.', missingDelimiterValue = "")
-//
-//        if (parentCipher.isNotEmpty() && rubricMap.containsKey(parentCipher)) {
-//            // Если нашли родительскую рубрику, добавляем текущую в ее children
-//            rubricMap[parentCipher]?.children?.add(rubric)
-//        } else {
-//            // Иначе, это корневой элемент
-//            rootRubrics.add(rubric)
-//        }
-//    }
-//
-//    // Записываем результат в корректный JSON с иерархией
-//    File(outputFilePath).writeText(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootRubrics))
-//}

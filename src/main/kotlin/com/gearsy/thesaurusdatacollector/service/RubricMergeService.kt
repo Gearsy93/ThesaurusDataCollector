@@ -54,7 +54,7 @@ class RubricMergeService {
         println("Файл сохранен: $cscstiEnrichFilePath")
     }
 
-    // 1️⃣ Извлекаем ключевые слова из ВИНИТИ
+    // Извлекаем ключевые слова из ВИНИТИ
     private fun extractVinitiKeywords(node: JsonNode, vinitiKeywordsMap: MutableMap<String, MutableSet<String>>) {
         val vinitiParentCipher = node.get("vinitiParentNodeCipher")?.asText() ?: ""
         if (vinitiParentCipher.isNotBlank()) {
@@ -64,7 +64,7 @@ class RubricMergeService {
         node.get("children")?.forEach { extractVinitiKeywords(it, vinitiKeywordsMap) }
     }
 
-    // 2️⃣ Обновляем структуру ГРНТИ
+    // Обновляем структуру ГРНТИ
     private fun updateCSCSTI(node: JsonNode, vinitiKeywordsMap: MutableMap<String, MutableSet<String>>, objectMapper: ObjectMapper): JsonNode {
         val cipher = node.get("cipher")?.asText() ?: return node
 
