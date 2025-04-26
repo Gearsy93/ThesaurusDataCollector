@@ -22,6 +22,7 @@ configurations {
 
 repositories {
 	mavenCentral()
+	maven { url = uri("https://repo.spring.io/milestone") }
 }
 
 dependencies {
@@ -66,7 +67,6 @@ tasks.register<JavaExec>("runParseCscsti") {
 	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
 	classpath = sourceSets["main"].runtimeClasspath
 
-	// Читаем шифр рубрики из параметров Gradle (или используем значение по умолчанию)
 	val cipher: String = project.findProperty("cipher")?.toString() ?: run {
 		return@register
 	}
@@ -79,16 +79,37 @@ tasks.register<JavaExec>("runEnrichCSCSTIByVinitiKeywords") {
 	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
 	classpath = sourceSets["main"].runtimeClasspath
 
-	// Читаем параметры из аргументов Gradle (-PcscstiCipher=... -PvinitiCipher=...)
 	val cscstiCipher: String = project.findProperty("cscstiCipher")?.toString() ?: run {
-		println("Ошибка: укажите шифр рубрики CSCSTI через  =...")
 		return@register
 	}
 
 	val vinitiCipher: String = project.findProperty("vinitiCipher")?.toString() ?: run {
-		println("Ошибка: укажите шифр рубрики VINITI через  ...")
 		return@register
 	}
 
 	args = listOf("-enrich_cscsti", cscstiCipher, vinitiCipher)
+}
+
+tasks.register<JavaExec>("runListLinkRubric") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+
+	val cipher: String = project.findProperty("cipher")?.toString() ?: run {
+		return@register
+	}
+
+	args = listOf("-list_link_rubric", cipher)
+}
+
+tasks.register<JavaExec>("runFillWithLinkRubricKeywords") {
+	group = "application"
+	mainClass.set("com.gearsy.thesaurusdatacollector.ThesaurusDataCollectorApplicationKt")
+	classpath = sourceSets["main"].runtimeClasspath
+
+	val cipher: String = project.findProperty("cipher")?.toString() ?: run {
+		return@register
+	}
+
+	args = listOf("-fill_link_keyword", cipher)
 }

@@ -38,3 +38,6 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### Конфигурация ###
+src/main/resources/application.yaml
